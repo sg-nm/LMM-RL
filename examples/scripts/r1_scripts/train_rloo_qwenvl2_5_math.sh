@@ -1,18 +1,18 @@
-export DATASET="/lnt/workspace/pengyingzhe.py/code/OpenRLHF/data/VLM-R1/mathlv345_8k_chatml.json"
+export DATASET="/root/projects/OpenRLHF/data/mathlv345_8k_chatml.json"
 
 MODEL_CPK_NAME="qwenvl25_3B_ins_rloo_math"
-PRETRAIN_MODEL="Qwen/Qwen2.5-VL-3B-Instruct"
+PRETRAIN_MODEL="/root/projects/OpenRLHF/ckpts/Qwen2.5-VL-3B-Instruct"
 SAVE_PATH="./ckpts"
 mkdir -p "${SAVE_PATH}/${MODEL_CPK_NAME}"
 
-python -m openrlhf.models.remote_rm.math_verifier --dataset $DATASET > "${SAVE_PATH}/${MODEL_CPK_NAME}/remote_rm.log" 2>&1 &
+python -m openrlhf.models.remote_rm.math_verifier --dataset $DATASET --input_key prompt --prompt-template chatml > "${SAVE_PATH}/${MODEL_CPK_NAME}/remote_rm.log" 2>&1 &
 childpid=$!
 
 ray start --head --node-ip-address 0.0.0.0 --num-gpus 8 --temp-dir ~/.cache/ray
 
 ray job submit --address="http://127.0.0.1:8265" \
-   --runtime-env-json='{"working_dir": "/lnt/workspace/pengyingzhe.py/code/OpenRLHF"}' \
-   -- /opt/conda/envs/rl/bin/python -m openrlhf.cli.train_ppo_ray \
+   --runtime-env-json='{"working_dir": "/root/projects/OpenRLHF"}' \
+   -- python3 -m openrlhf.cli.train_ppo_ray \
    --ref_num_nodes 1 \
    --ref_num_gpus_per_node 8 \
    --remote_rm_url http://127.0.0.1:5000//get_reward \
@@ -55,4 +55,3 @@ ray job submit --address="http://127.0.0.1:8265" \
 
 # also supports --advantage_estimator rloo
 ray stop
-kill $childpid
