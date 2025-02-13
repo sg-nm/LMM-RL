@@ -29,11 +29,13 @@
 LMM-R1 is a fork of [OpenRLHF](https://github.com/OpenRLHF/OpenRLHF), aimed at providing high-performance LMM Reinforcement Learning infrastructure for reproduction of DeepSeek-R1 on multimodal tasks.
 
 - **Simple and easy to use**: OpenRLHF is one of the simplest high-performance RLHF libraries currently available, and seamlessly compatible with Huggingface models and datasets.
-- **High performance**: RL training spends 80% of the time on the sample generation stage. Thanks to the ability to use a large inference batch size with Ray and Packing Samples and vLLM generation acceleration, the performance of OpenRLHF 3~4x+ that of Optimized DeepSpeedChat with Hybrid Engine.
+- **High performance**: RL training spends 80% of the time on the sample generation stage. Thanks to the ability to use a large inference batch size with Ray and Packing Samples and vLLM generation acceleration, the performance of OpenRLHF 3~4x+ that of Optimized DeepSpeedChat with Hybrid Engine, and 10~11x+ that of [R1-V](https://github.com/Deep-Agent/R1-V).
 - **Distributed RLHF**:  OpenRLHF distribute the Actor, Reward, Reference, and Critic models onto separate GPUs using Ray, while placing the Adam optimizer on the CPU. This enables full-scale fine-tuning of 70B+ models with multiple A100 80G GPUs and vLLM and 7B models across multiple 24GB RTX 4090 GPUs.
 - **PPO Implementation Optimization**: We integrated the implementation tricks for PPO to improve the training stability, referencing [Zhihu](https://zhuanlan.zhihu.com/p/622134699) and [Advanced Tricks for Training Large Language Models with Proximal Policy Optimization](https://hijkzzz.notion.site/rlhf-implementation-tricks?v=158d9a33ecc98132bf9e000c39227361).
 
 More details are in [Slides](https://docs.google.com/presentation/d/1JRhB1d7csofx0PIZBmfyBdMluxNd5JLPpUHrrvVhGnk/edit?usp=sharing) | [Technical Report](https://arxiv.org/abs/2405.11143) | [Documents](https://openrlhf.readthedocs.io/)
+
+![time_compare](./docs/time_compare.jpg)
 
 Team:
 
@@ -71,23 +73,6 @@ This result reminds us that the existing rich high-quaity text-modality reasonin
 - Logging support with Wandb (`--use_wandb`) and TensorBoard (`--use_tensorboard`).  
 - Checkpoint recovery functionality (`--load_checkpoint` and `--save_steps`).  
 - Provided multi-node training scripts, such as [Ray PPO](./examples/scripts/train_ppo_llama_ray_slurm.sh).
-
-
-### PPO Support Matrix
-
-| Feature | OpenRLHF | DSChat | CAIChat | TRL |
-| ------------- |:-------------:| :-------------:| :-------------:| :-------------:|
-| 70B+ Full Tuning with 16 A100-80GB      | ✅ | ❌ | ❌ | ❌ |
-| 7B Full Tuning with 4 RTX4090 | ✅      |    ❌ | ❌ | ❌ |
-| 34B DPO Full Tuning with 8 A100-80GB | ✅      |    ❌ | ❌ | ❌ |  
-| Inference Engine in PPO | ✅      |    ✅ | ❌ | ❌ |  
-| PPO Implementation Tricks | ✅      |    ❌ | ❌ | ✅ |
-| Support QLoRA | ✅      |    ❌ | ❌ | ✅ | 
-| Support Mixtral 8*7b | ✅      |    ❌ | ❌ | ❌ |  
-| Support Unmerged Actor-Critic | ✅     |   ✅ | ✅ | ❌ | 
-| Support Multiple Reward Models | ✅      |    ❌ | ❌ | ❌ |   
-| Support Huggingface Models | ✅      |    ✅ | ✅ | ✅ | 
-| Easy-to-use | ✅      |   ❌ (HybridEngine bugs) | ✅ | ✅ | 
 
 
 ## Quick Start
@@ -239,6 +224,21 @@ To achieve optimal performance, we recommend allocating nodes number `vLLM:Actor
 
 
 ## References & Acknowledgements
+We sincerely thank [DeepSeek](https://github.com/deepseek-ai/DeepSeek-R1) for their exploration on LLM reasoning, and [OpenRLHF](https://github.com/OpenRLHF/OpenRLHF) for their incredible RL infrastructure. We also thank [open-r1](https://github.com/huggingface/open-r1) and [simpleRL-reason](https://github.com/hkust-nlp/simpleRL-reason) which give us insights on reproduction of R1.
 
+- [DeepSeek](https://github.com/deepseek-ai/DeepSeek-R1) 
 - [OpenRLHF](https://github.com/OpenRLHF/OpenRLHF)
 - [open-r1](https://github.com/huggingface/open-r1)
+- [simpleRL-reason](https://github.com/hkust-nlp/simpleRL-reason)
+
+## Citation
+
+```bib
+@misc{peng2025lmmr1,
+  author       = {YingZhe Peng and Gongrui Zhang and Xu Yang and Xin Geng},
+  title        = {LMM-R1},
+  howpublished = {\url{https://github.com/TideDra/lmm-r1}},
+  note         = {Accessed: 2025-02-13},
+  year         = {2025}
+}
+```
