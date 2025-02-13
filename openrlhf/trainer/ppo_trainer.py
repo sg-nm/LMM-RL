@@ -103,6 +103,7 @@ class PPOTrainer(ABC):
         self.micro_rollout_batch_size = micro_rollout_batch_size
         self.max_epochs = max_epochs
         self.tokenizer = tokenizer
+        self.processor = processor
         self.data_processor = None
         # for vlm critic model, not provice processor.
         if self.args.train_vlm and processor is not None:
@@ -532,4 +533,4 @@ class PPOTrainer(ABC):
 
         if self.save_hf_ckpt:
             save_path = os.path.join(args.ckpt_path, f"{tag}_hf")
-            self.strategy.save_model(self.actor, self.tokenizer, save_path)
+            self.strategy.save_model(self.actor, self.processor or self.tokenizer, save_path)

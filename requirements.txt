@@ -3,7 +3,7 @@ bitsandbytes
 datasets
 deepspeed==0.16.3
 einops
-flash-attn==2.7.0.post2
+flask
 isort
 jsonlines
 loralib
@@ -15,7 +15,7 @@ tensorboard
 torch
 torchmetrics
 tqdm
-transformers==4.48.2
+transformers @ git+https://github.com/huggingface/transformers@main
 transformers_stream_generator
 wandb
 wheel

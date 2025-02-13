@@ -139,14 +139,20 @@ def convert_token_to_id(token, tokenizer):
     else:
         raise ValueError("token should be int or str")
 
-def get_conditional_generation_cls(config):
+def get_generation_cls(config):
     model_type = config.model_type
-    model_architecture = AutoModel._model_mapping[type(config)].__name__
-    if not model_architecture.endswith("ForConditionalGeneration"):
-        if model_architecture.endswith("Model"):
-            model_architecture = model_architecture.replace("Model", "")
-        model_architecture += "ForConditionalGeneration"
-    import importlib
-    module = importlib.import_module(f".models.{model_type}.modeling_{model_type}",package="transformers")
-    model_cls = getattr(module, model_architecture)
-    return model_cls
+    model_arch = AutoModel._model_mapping[type(config)].__name__
+    if model_arch.endswith("ForCausalLM") or \
+    model_arch.endswith("ForConditionalGeneration"):
+        return AutoModel._model_mapping[type(config)]
+    elif model_arch.endswith("Model"):
+        possible_arch = [model_arch.replace("Model", "ForCausalLM"), model_arch.replace("Model", "ForConditionalGeneration")]
+        import importlib
+        module = importlib.import_module(f".models.{model_type}.modeling_{model_type}",package="transformers")
+        for arch in possible_arch:
+            model_cls = getattr(module, arch, None)
+            if model_cls is not None:
+                return model_cls
+        raise ValueError(f"Cannot find ForCausalLM or ForConditionalGeneration class for {model_arch}")
+    else:
+        raise ValueError(f"Unexpected model architecture {model_arch}")

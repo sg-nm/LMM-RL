@@ -5,12 +5,12 @@ import torch.distributed as dist
 import torch.nn as nn
 from peft import LoraConfig, TaskType, get_peft_model
 from peft.tuners.lora import LoraLayer
-from transformers import AutoModelForCausalLM, BitsAndBytesConfig, AutoConfig
+from transformers import BitsAndBytesConfig, AutoConfig
 from transformers.integrations.deepspeed import HfDeepSpeedConfig
 
 from .ring_attn_utils import convert_ring_attn_params
 from .utils import log_probs_from_logits, reset_position_ids
-from ..utils.utils import get_conditional_generation_cls
+from ..utils.utils import get_generation_cls
 
 
 class Actor(nn.Module):
@@ -73,7 +73,7 @@ class Actor(nn.Module):
 
             #There is no AutoModelForConditionalGeneration in transformers. We manually implement it.
             config = AutoConfig.from_pretrained(pretrain_or_model)
-            model_cls = get_conditional_generation_cls(config)
+            model_cls = get_generation_cls(config)
             self.model = model_cls.from_pretrained(
                 pretrain_or_model,
                 trust_remote_code=True,

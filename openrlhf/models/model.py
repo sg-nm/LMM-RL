@@ -13,7 +13,7 @@ from openrlhf.utils.logging_utils import init_logger
 
 from .ring_attn_utils import convert_ring_attn_params
 from .utils import reset_position_ids
-from ..utils.utils import get_conditional_generation_cls
+from ..utils.utils import get_generation_cls
 
 logger = init_logger(__name__)
 
@@ -74,7 +74,7 @@ def get_llm_for_sequence_regression(
     # Prioritize using the value_head_prefix in the model configuration.
     value_head_prefix = getattr(config, "value_head_prefix", value_head_prefix)
     logger.info(f"set value_head_prefix to `{value_head_prefix}`")
-    base_class = get_conditional_generation_cls(config)
+    base_class = get_generation_cls(config)
     base_pretrained_class = base_class.__base__
     if model_type == "reward":
         cls_class = _get_reward_model(base_class, value_head_prefix, packing_samples)

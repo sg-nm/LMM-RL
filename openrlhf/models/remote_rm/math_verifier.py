@@ -14,19 +14,6 @@ app = Flask(__name__)
 
 problem_to_answer = {}
 
-def remove_vision_tags(text: str) -> str:
-    # 使用正则表达式匹配 <|vision_start|><|image_pad|>*<|vision_end|> 模式
-    pattern = r'<\|vision_start\|>(?:<\|image_pad\|>)*<\|vision_end\|>'
-    # 将匹配到的内容替换为空字符串
-    cleaned_text = re.sub(pattern, '', text)
-    return cleaned_text
-
-def get_problem_from_query(q):
-    problem = re.findall(problem_pattern, q, re.DOTALL)
-    if len(problem) == 0:
-        return None
-    return problem[0]
-
 
 def get_response_from_query(q: str):
     ends_of_sentence = ["<|im_end|>", "<｜end▁of▁sentence｜>", "<|endoftext|>"]
@@ -106,9 +93,7 @@ def get_reward():
     if "query" not in data:
         return jsonify({"error": "queries field is required"}), 400
     rewards = []
-    for q in data["query"]:
-        problem = get_problem_from_query(q)
-        problem = remove_vision_tags(problem)
+    for q,problem in zip(data["query"],data["prompts"]):
         if problem is None:
             return jsonify({"error": f"problem not found from {q}"}), 400
         if problem not in problem_to_answer:
@@ -124,9 +109,10 @@ def get_reward():
         acc_reward = float(output_queue.get())
         do_print = random.randint(1, 20) == 1
         if do_print:
-            print(
-                f"Query: {q}\n\nProblem: {problem}\n\n Answer: {answer}\n\n Response: {response}\n\n Format Reward: {format_reward}\n\n Acc Reward: {acc_reward}\n\n"
-            )
+            info=f"Query: {q}\n\nProblem: {problem}\n\n Answer: {answer}\n\n Response: {response}\n\n Format Reward: {format_reward}\n\n Acc Reward: {acc_reward}\n\n"
+            info = re.sub(r"<\|.*?\|>","",info)
+            print(info)
+            
         rewards.append(0.5 * format_reward + acc_reward)
     # 返回包含 rewards 的响应
     return jsonify({"rewards": rewards})
@@ -137,6 +123,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset", type=str, default="math_dataset", help="Dataset to use"
     )
+    parser.add_argument(
+        "--prompt-template", type=str, default="chatml", help="Prompt template"
+    )
+    parser.add_argument(
+        "--input_key", type=str, default="prompt", help="The key name of prompt."
+    )
     args = parser.parse_args()
     if args.dataset.endswith("json"):
         with open(args.dataset, "r") as f:
@@ -144,31 +136,23 @@ if __name__ == "__main__":
     elif args.dataset.endswith("jsonl"):
         with open(args.dataset, "r") as f:
             dataset = [json.loads(l) for l in f.readlines()]
-    dataset_name = os.path.basename(args.dataset).split(".")[0]
 
-    if dataset_name.endswith("chatml"):
+    format_pattern = r"^<think>.*?</think><answer>.*?</answer>$"
+
+    if args.prompt_template=="chatml":
         problem_pattern = r"<\|im_start\|>user\n(.*?)<\|im_end\|>"
-        format_pattern = r"^<think>.*?</think><answer>.*?</answer>$"
         response_prefix = r"<\|im_start\|>assistant\n"
-    elif dataset_name.endswith("qwen1"):
+    elif args.prompt_template=="qwen1":
         problem_pattern = r"｜User｜>(.*?)<｜Assistant｜>"
-        format_pattern = r"^<think>.*?</think><answer>.*?</answer>$"
         response_prefix = r"<｜Assistant｜>"
-    elif dataset_name.endswith("base"):
+    elif args.prompt_template=="base":
         problem_pattern = r"User: (.*?)\n\nAssistant:"
-        format_pattern = r"^<think>.*?</think><answer>.*?</answer>$"
         response_prefix = r"Assistant: "
     else:
         raise ValueError(f"Unknown chat format: {args.dataset}")
     print("load dataset success")
     for item in dataset:
-        if "question" not in item:
-            query = item["prompt"]
-            problem = get_problem_from_query(query)
-            if problem is None:
-                raise ValueError(f"Problem not found in query: {query}")
-        else:
-            problem = item['question']
+        problem = item[args.input_key]
         answer = item["answer"].strip()
         # we require the answer to be in latex format
         if answer[0] != "$":
