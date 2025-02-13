@@ -35,6 +35,10 @@ LMM-R1 is a fork of [OpenRLHF](https://github.com/OpenRLHF/OpenRLHF), aimed at p
 
 More details are in [Slides](https://docs.google.com/presentation/d/1JRhB1d7csofx0PIZBmfyBdMluxNd5JLPpUHrrvVhGnk/edit?usp=sharing) | [Technical Report](https://arxiv.org/abs/2405.11143) | [Documents](https://openrlhf.readthedocs.io/)
 
+Team:
+
+[Gongrui Zhang](https://github.com/TideDra) | [YingZhe Peng](https://github.com/ForJadeForest)
+
 ## News
 - [2025/2/13] We release code of LMM-R1!
 
