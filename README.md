@@ -220,7 +220,7 @@ To achieve optimal performance, we recommend allocating nodes number `vLLM:Actor
 
 ## Starchart
 
-[![Star History Chart](https://api.star-history.com/svg?repos=TideDra/lmm-r1&type=Date)](https://star-history.com/#TideDra/llm-r1&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=TideDra/lmm-r1&type=Date)](https://star-history.com/#TideDra/lmm-r1&Date)
 
 
 ## References & Acknowledgements
