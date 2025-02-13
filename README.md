@@ -3,19 +3,19 @@
 </div>
 <div align="center">
 <p align="center">
-      <a href="https://github.com/OpenRLHF/OpenRLHF/graphs/contributors">
-        <img alt="GitHub Contributors" src="https://img.shields.io/github/contributors/OpenRLHF/OpenRLHF" />
+      <a href="https://github.com/TideDra/lmm-r1/graphs/contributors">
+        <img alt="GitHub Contributors" src="https://img.shields.io/github/contributors/TideDra/lmm-r1" />
       </a>
-      <a href="https://github.com/OpenRLHF/OpenRLHF/issues">
-        <img alt="Issues" src="https://img.shields.io/github/issues/OpenRLHF/OpenRLHF?color=0088ff" />
+      <a href="https://github.com/TideDra/lmm-r1/issues">
+        <img alt="Issues" src="https://img.shields.io/github/issues/TideDra/lmm-r1?color=0088ff" />
       </a>
-      <a href="https://github.com/OpenRLHF/OpenRLHF/discussions">
-        <img alt="Issues" src="https://img.shields.io/github/discussions/OpenRLHF/OpenRLHF?color=0088ff" />
+      <a href="https://github.com/TideDra/lmm-r1/discussions">
+        <img alt="Issues" src="https://img.shields.io/github/discussions/TideDra/lmm-r1?color=0088ff" />
       </a>
-      <a href="https://github.com/OpenRLHF/OpenRLHF/pulls">
-        <img alt="GitHub pull requests" src="https://img.shields.io/github/issues-pr/OpenRLHF/OpenRLHF?color=0088ff" />
-      <a href="https://github.com/OpenRLHF/OpenRLHF/stargazers">
-        <img alt="GitHub stars" src="https://img.shields.io/github/stars/OpenRLHF/OpenRLHF?color=ccf" />
+      <a href="https://github.com/TideDra/lmm-r1/pulls">
+        <img alt="GitHub pull requests" src="https://img.shields.io/github/issues-pr/TideDra/lmm-r1?color=0088ff" />
+      <a href="https://github.com/TideDra/lmm-r1/stargazers">
+        <img alt="GitHub stars" src="https://img.shields.io/github/stars/TideDra/lmm-r1?color=ccf" />
       </a>
       <br>
       <em>Open-source / Comprehensive / Lightweight / Easy-to-use</em>
@@ -114,14 +114,16 @@ LMM-R1 requires the multimodal prompt dataset to be in OpenAI-compatible message
                 \"type\": \"image\",
                 \"image\": \"file:///path/to/your/image.jpg\",
             }, \
-            {\"type\": \"text\", \"text\": \"Describe this image.\"},
+            {\"type\": \"text\", \"text\": \"How many cats in the image?\"},
         ],
       }
-    ]"
+    ]",
+    "answer": "$3$"
   },
 ]
 ```
 **Note that message is a stringfied list.**
+An example dataset `examples/data/test_message.jsonl` is for reference.
 
 - We can use `--input_key` to specify the `JSON key name` of the input datasets `--prompt_data {name or path}` (PPO) or `--dataset {name or path}`. **Do not** use `--apply_chat_template` for multimodal prompt, the message will be processed internally.
 - OpenRLHF also support mixing multiple datasets using `--prompt_data_probs 0.1,0.4,0.5` (PPO) or `--dataset_probs 0.1,0.4,0.5`.
