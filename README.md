@@ -232,7 +232,7 @@ We sincerely thank [DeepSeek](https://github.com/deepseek-ai/DeepSeek-R1) for th
 
 ```bib
 @misc{peng2025lmmr1,
-  author       = {YingZhe Peng and Gongrui Zhang and Xu Yang and Xin Geng},
+  author       = {YingZhe Peng and Gongrui Zhang and Xin Geng and Xu Yang},
   title        = {LMM-R1},
   howpublished = {\url{https://github.com/TideDra/lmm-r1}},
   note         = {Accessed: 2025-02-13},
