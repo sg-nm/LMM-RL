@@ -52,6 +52,8 @@ We train Qwen2.5-VL-3B-Instruct on 8k text-only MATH (level3-5) dataset using RL
 
 This result reminds us that the existing rich high-quaity text-modality reasoning data maybe beneficial to train a strong multimodal reasoning model, especially at this very moment when high-quality multimodal reasoning data is scarce.
 
+We provide the data `examples/data/mathlv345_8k_chatml.json` and script `examples/scripts/r1_scripts/train_rloo_qwenvl2_5_math.sh` for reproduction. Note that the system prompt of our model is consistent with that of training during evaluation.
+
 ### More findings are coming...
 
 ## Features
