@@ -219,7 +219,7 @@ To achieve optimal performance, we recommend allocating nodes number `vLLM:Actor
 
 
 ## References & Acknowledgements
-We sincerely thank [DeepSeek](https://github.com/deepseek-ai/DeepSeek-R1) for their exploration on LLM reasoning, and [OpenRLHF](https://github.com/OpenRLHF/OpenRLHF) for their incredible RL infrastructure. We also thank [open-r1](https://github.com/huggingface/open-r1) and [simpleRL-reason](https://github.com/hkust-nlp/simpleRL-reason) which give us insights on reproduction of R1. Special thanks to [Kai Yang](https://github.com/yangkai798), [Jie Liu](jieliu.site), [ZhiYuan You](zhiyuanyou.github.io) for their valuable suggestions.
+We sincerely thank [DeepSeek](https://github.com/deepseek-ai/DeepSeek-R1) for their exploration on LLM reasoning, and [OpenRLHF](https://github.com/OpenRLHF/OpenRLHF) for their incredible RL infrastructure. We also thank [open-r1](https://github.com/huggingface/open-r1) and [simpleRL-reason](https://github.com/hkust-nlp/simpleRL-reason) which give us insights on reproduction of R1. Special thanks to [Kai Yang](https://github.com/yangkai798), [Jie Liu](https://jieliu.site/), [ZhiYuan You](https://zhiyuanyou.github.io/) for their valuable suggestions.
 
 - [DeepSeek](https://github.com/deepseek-ai/DeepSeek-R1) 
 - [OpenRLHF](https://github.com/OpenRLHF/OpenRLHF)
