@@ -200,7 +200,11 @@ kill $childpid
 
 
 > [!NOTE]
-> RLOO in OPENRLHF is a modification based on REINFORCE++, differing from the original version.
+> RLOO and REINFORCE++-baseline in OPENRLHF are a modification based on REINFORCE++:
+> - REINFORCE++ integrates key optimization techniques from PPO while eliminating the need for a critic network.
+> - REINFORCE++-baseline uses the mean reward of multiple samples from the same prompt as the baseline.
+> - RLOO in OpenRLHF modifies the original version by incorporating the `per-token KL reward` and utilizing the `PPO-clip loss`.
+
 
 > [!NOTE]
 > If you encounter an error related to index out of range when deepspeed sets up the GPU devices, you can try to set the environment variable [`RAY_EXPERIMENTAL_NOSET_*_VISIBLE_DEVICES`](openrlhf/trainer/ray/utils.py) as a workaround.

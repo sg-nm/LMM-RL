@@ -40,6 +40,8 @@ ray job submit --address="http://127.0.0.1:8265" \
    --adam_offload \
    --gradient_checkpointing \
    --packing_samples \
-   --vllm_sync_backend gloo \
+   --vllm_sync_backend nccl \
    --enforce_eager \
    --vllm_enable_sleep
+
+# also supports --advantage_estimator rloo | reinforce_baseline

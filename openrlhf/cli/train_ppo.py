@@ -79,13 +79,16 @@ def train(args):
     tokenizer = get_tokenizer(args.pretrain, actor.model, "left", strategy, use_fast=not args.disable_fast_tokenizer)
 
     # load weights for reference actor
-    initial_model = Actor(
-        args.pretrain,
-        use_flash_attention_2=args.flash_attn,
-        bf16=args.bf16,
-        load_in_4bit=args.load_in_4bit,
-        ds_config=strategy.get_ds_eval_config(offload=False),
-    )
+    if args.init_kl_coef == 0:
+        initial_model = None
+    else:
+        initial_model = Actor(
+            args.pretrain,
+            use_flash_attention_2=args.flash_attn,
+            bf16=args.bf16,
+            load_in_4bit=args.load_in_4bit,
+            ds_config=strategy.get_ds_eval_config(offload=False),
+        )
 
     if args.enable_ema:
         ema_model = Actor(
@@ -311,7 +314,7 @@ if __name__ == "__main__":
     parser.add_argument("--ptx_coef", type=float, default=0.05, help="PPO-ptx loss coef")
     parser.add_argument("--eps_clip", type=float, default=0.2, help="PPO clip range")
     parser.add_argument("--value_clip", type=float, default=0.2, help="PPO value clip range")
-    parser.add_argument("--lambd", type=float, default=1.0, help="PPO GAE lambd")
+    parser.add_argument("--lambd", type=float, default=0.95, help="PPO GAE lambd")
     parser.add_argument("--gamma", type=float, default=1, help="PPO GAE gamma")
     parser.add_argument("--micro_train_batch_size", type=int, default=4, help="batch size per GPU")
     parser.add_argument("--train_batch_size", type=int, default=128, help="Global training batch size")
@@ -366,9 +369,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--advantage_estimator",
         type=str,
-        choices=["gae", "reinforce", "rloo"],
+        choices=["gae", "reinforce", "rloo", "reinforce_baseline"],
         default="gae",
-        help="Choose advantage estimation method: gae, reinforce, rloo",
+        help="Choose advantage estimation method: gae, reinforce, rloo, reinforce_baseline",
     )
 
     # LoRA
@@ -422,6 +425,9 @@ if __name__ == "__main__":
     # TensorBoard parameters
     parser.add_argument("--use_tensorboard", type=str, default=None, help="TensorBoard logging path")
 
+    # ModelScope parameters
+    parser.add_argument("--use_ms", action="store_true", default=False)
+
     args = parser.parse_args()
 
     if args.advantage_estimator not in ["gae"]:
@@ -432,8 +438,8 @@ if __name__ == "__main__":
         else:
             args.critic_pretrain = args.pretrain
 
-    if args.advantage_estimator == "rloo":
-        assert args.n_samples_per_prompt > 1, "RLOO requires n_samples_per_prompt > 1"
+    if args.advantage_estimator in ["rloo", "reinforce_baseline"]:
+        assert args.n_samples_per_prompt > 1, "RLOO/REINFORCE++-baseline requires n_samples_per_prompt > 1"
 
     if args.input_template and "{}" not in args.input_template:
         print("[Warning] {} not in args.input_template, set to None")
@@ -451,5 +457,11 @@ if __name__ == "__main__":
         if args.pretrain_data:
             print("[Warning] --train_vlm is not supported with --pretrain_data. We will set args.pretrain_data to None")
             args.pretrain_data = None
+
+    if args.use_ms:
+        from modelscope.utils.hf_util import patch_hub
+
+        # Patch hub to download models from modelscope to speed up.
+        patch_hub()
 
     train(args)
