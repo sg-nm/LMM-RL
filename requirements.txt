@@ -13,6 +13,7 @@ optimum
 packaging
 peft
 pynvml>=12.0.0
+qwen_vl_utils
 ray[default]==2.42.0
 tensorboard
 torch
