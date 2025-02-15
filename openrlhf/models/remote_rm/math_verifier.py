@@ -121,10 +121,10 @@ def get_reward():
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument(
-        "--dataset", type=str, default="math_dataset", help="Dataset to use"
+        "--dataset", type=str, default=None, help="Dataset to use", required=True
     )
     parser.add_argument(
-        "--prompt-template", type=str, default="chatml", help="Prompt template"
+        "--prompt-template", type=str, default=None, help="Prompt template", required=True
     )
     parser.add_argument(
         "--input_key", type=str, default="prompt", help="The key name of prompt."
