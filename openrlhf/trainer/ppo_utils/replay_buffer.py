@@ -200,7 +200,7 @@ class NaiveReplayBuffer(ABC):
         items = split_experience_batch(experience, self.data_processor)
         # NOTE: No tested
         if self.drop_maxlen:
-            original_len = len(self.items)
+            original_len = len(items)
             items = list(filter(lambda x: x.sequences.shape[-1] <= self.maxlen, items))
             if original_len - len(items) > 0:
                 print(f"drop {original_len - len(items)} samples")
