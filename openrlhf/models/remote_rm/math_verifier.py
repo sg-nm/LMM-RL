@@ -27,7 +27,16 @@ def get_response_from_query(q: str):
 
 
 def verify_format(content):
-    return re.match(format_pattern, content, re.DOTALL) is not None
+    """
+    Verify if the string meets the format requirements:
+    - Must start with <think> and end with </answer>
+    - Must contain exactly one pair of <think>...</think> and <answer>...</answer> tags
+    - No extra characters allowed between </think> and <answer> tags
+    """
+    think_count = content.count("<think>")
+    answer_count = content.count("<answer>")
+    return bool(re.match(format_pattern, content, re.DOTALL)) and think_count == 1 and answer_count == 1
+
 
 
 def find_similar_problem(problem):
@@ -71,7 +80,6 @@ def verify_math(input_queue, output_queue):
                 extraction_mode="first_match",
             )
             # Reward 1 if the content is the same as the ground truth, 0 otherwise
-            print(answer_parsed, gold_parsed)
             try:
                 reward = float(verify(answer_parsed, gold_parsed))
             except Exception as e:
@@ -121,7 +129,7 @@ def get_reward():
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument(
-        "--dataset", type=str, default=None, help="Dataset to use", required=True
+        "--dataset", type=str, default=None, help="Datasets to use (comma separated)", required=True
     )
     parser.add_argument(
         "--prompt-template", type=str, default=None, help="Prompt template", required=True
@@ -130,14 +138,21 @@ if __name__ == "__main__":
         "--input_key", type=str, default="prompt", help="The key name of prompt."
     )
     args = parser.parse_args()
-    if args.dataset.endswith("json"):
-        with open(args.dataset, "r") as f:
-            dataset = json.load(f)
-    elif args.dataset.endswith("jsonl"):
-        with open(args.dataset, "r") as f:
-            dataset = [json.loads(l) for l in f.readlines()]
+    
+    # Split dataset paths and load all datasets
+    dataset = []
+    for dataset_path in args.dataset.split(','):
+        dataset_path = dataset_path.strip()
+        if dataset_path.endswith("json"):
+            with open(dataset_path, "r") as f:
+                dataset.extend(json.load(f))
+        elif dataset_path.endswith("jsonl"):
+            with open(dataset_path, "r") as f:
+                dataset.extend([json.loads(l) for l in f.readlines()])
+        else:
+            raise ValueError(f"Unsupported file format for dataset: {dataset_path}")
 
-    format_pattern = r"^<think>.*?</think><answer>.*?</answer>$"
+    format_pattern = r"^<think>(?:(?!</think>).)*</think><answer>(?:(?!</answer>).)*</answer>\Z"
 
     if args.prompt_template=="chatml":
         problem_pattern = r"<\|im_start\|>user\n(.*?)<\|im_end\|>"
