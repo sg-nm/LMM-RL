@@ -163,7 +163,7 @@ class PPOTrainer(ABC):
         self.replay_buffer = NaiveReplayBuffer(
             micro_train_batch_size, self.data_processor, buffer_limit, buffer_cpu_offload, packing_samples,
             drop_maxlen=self.args.drop_maxlen, 
-            maxlen=self.args.generate_max_len,
+            maxlen=self.args.generate_max_len + prompt_max_len,
         )
 
         # wandb/tensorboard setting

@@ -200,7 +200,10 @@ class NaiveReplayBuffer(ABC):
         items = split_experience_batch(experience, self.data_processor)
         # NOTE: No tested
         if self.drop_maxlen:
-            items = list(filter(lambda x: x.sequences.shape[-1] >= self.maxlen, items))
+            original_len = len(self.items)
+            items = list(filter(lambda x: x.sequences.shape[-1] <= self.maxlen, items))
+            if original_len - len(items) > 0:
+                print(f"drop {original_len - len(items)} samples")
         # the packed samples comes with no padding
         if not self.packing_samples:
             items = remove_padding_in_sequences(items)
