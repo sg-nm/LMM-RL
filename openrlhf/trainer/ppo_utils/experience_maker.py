@@ -379,6 +379,7 @@ class NaiveExperienceMaker(ABC):
             action_mask,
             info,
             kl,
+            visual_inputs=visual_inputs
         )
 
     @torch.no_grad()
@@ -644,7 +645,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
             ray.get([self.reward_model[0].empty_cache.remote()])
 
         # log probs
-        action_log_probs = self.actor(sequences, num_actions, attention_mask, packed_seq_lens=packed_seq_lens)
+        action_log_probs = self.actor(sequences, num_actions, attention_mask, packed_seq_lens=packed_seq_lens,visual_inputs=visual_inputs)
         actor_value_rm_time = time.time() - start
 
         # wait initial/critic/reward model done
@@ -713,7 +714,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
             action_mask,
             info,
             kl,
-            visual_inputs=visual inputs
+            visual_inputs=visual_inputs
         )
 
         self.actor.train()  # reset model state
@@ -872,6 +873,13 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                 action_mask = None
                 response_length = torch.tensor(num_actions, device="cuda", dtype=torch.float)
                 total_length = torch.tensor(packed_seq_lens, device="cuda", dtype=torch.float)
+                # Collect for visual input
+                visual_inputs = None
+                if self.data_processor is not None:
+                    visual_inputs = self.data_processor(prompts, self.prompt_max_len, device="cuda")
+                    visual_inputs.pop("input_ids")
+                    visual_inputs.pop("attention_mask")
+                    visual_inputs = {k: v.to("cuda") for k, v in visual_inputs.items()}
                 samples_list.append(
                     Samples(
                         sequences=sequences,
@@ -882,6 +890,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                         response_length=response_length,
                         total_length=total_length,
                         prompts=prompts,
+                        visual_inputs=visual_inputs
                     )
                 )
         return samples_list
