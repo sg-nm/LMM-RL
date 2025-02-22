@@ -371,6 +371,7 @@ class PPOTrainer(ABC):
             attention_mask=attention_mask,
             return_output=True,
             packed_seq_lens=packed_seq_lens,
+            visual_inputs=visual_inputs
         )
 
         # loss function
