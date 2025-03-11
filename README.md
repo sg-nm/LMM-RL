@@ -34,6 +34,7 @@
 [Switch to the Chinese version (切换至中文版)](/README_zh.md)
 
 ## News
+- [2025/3/11] 🚀 Our codebase is merged into [OpenRLHF-M](https://github.com/OpenRLHF/OpenRLHF-M), the official multimodal RL infrastructure developed by OpenRLHF.
 - [2025/3/11] ✨ We release our paper "[LMM-R1: Empowering 3B LMMs with Strong Reasoning Abilities Through Two-Stage Rule-Based RL](https://arxiv.org/pdf/2503.07536)"!
 
 - [2025/2/13] We release code of LMM-R1!

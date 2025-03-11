@@ -33,6 +33,7 @@
 [切换到英文版 (Switch to English version)](/README.md)
 
 ## 新闻
+- [2025/3/11] 🚀 我们的代码被合并进了[OpenRLHF-M](https://github.com/OpenRLHF/OpenRLHF-M), 由OpenRLHF官方开发的多模态强化学习框架。
 - [2025/3/11] ✨ 我们发布了论文 "[LMM-R1: 通过两阶段规则型强化学习增强3B大型多模态模型的推理能力](https://arxiv.org/pdf/2503.07536)"！
 
 - [2025/2/13] 我们发布了LMM-R1的代码！
