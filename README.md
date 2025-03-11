@@ -1,6 +1,9 @@
 <div align="center">
-    <img alt="LMM-R1 logo" src="./docs/lmm-r1-logo.png" style="height: 140px;" />
+    <img alt="LMM-R1 logo" src="./docs/lmm-r1-logo-panda.png" style="height: 140px;" />
 </div>
+
+# LMM-R1: Empowering 3B LMMs with Strong Reasoning Abilities
+
 <div align="center">
 <p align="center">
       <a href="https://github.com/TideDra/lmm-r1/graphs/contributors">
@@ -23,55 +26,37 @@
 </p>
 </div>
 
+
 <hr>
 
+[![🤗 HF Dataset](https://img.shields.io/badge/🤗-Dataset-yellow)](https://huggingface.co/datasets/TideDra/lmm-r1-data) [![🤗 HF Model](https://img.shields.io/badge/🤗-Model-blue)](https://huggingface.co/TideDra/lmm-r1) [![📄 Paper](https://img.shields.io/badge/📄-Paper-green)](https://arxiv.org/pdf/2503.07536) [![🌐 Project Page](https://img.shields.io/badge/🌐-Project_Page-purple)](https://forjadeforest.github.io/LMM-R1-ProjectPage/)
 
-LMM-R1 is a fork of [OpenRLHF](https://github.com/OpenRLHF/OpenRLHF), aimed at providing high-performance LMM Reinforcement Learning infrastructure for reproduction of DeepSeek-R1 on multimodal tasks.
-
-We currently support PPO/REINFORCE++/RLOO training for LMM, and achieve 4.7x speedup (RLOO) compared with [R1-V](https://github.com/Deep-Agent/R1-V) (GRPO).
-
-![time_compare](./docs/time_compare.jpg)
-
-Team:
-
-[Gongrui Zhang](https://github.com/TideDra) | [Yingzhe Peng](https://github.com/ForJadeForest) | [Miaosen Zhang](https://github.com/zhangmiaosen2000) | [Chengzhi Yu](https://github.com/MilchstraB) | [Qipeng Zhu](https://github.com/smurf-1119)
+[Switch to the Chinese version (切换至中文版)](/README_zh.md)
 
 ## News
+- [2025/3/11] ✨ We release our paper "[LMM-R1: Empowering 3B LMMs with Strong Reasoning Abilities Through Two-Stage Rule-Based RL](https://arxiv.org/pdf/2503.07536)"!
+
 - [2025/2/13] We release code of LMM-R1!
 
-## Our Findings
-### Super cross-modal generation ability of rule-based RL
-We train Qwen2.5-VL-3B-Instruct on 8k text-only MATH (level3-5) dataset using RLOO with a rule-based reward function. We find it gains significant improvement on challenging multi-modal math benchmarks (MathVision, MathVerse, Olympiadbench_en).
+## Introduction
 
-|               |   MathVision  |    MathVerse   | Olympiadbench_en |
-| ------------- |:-------------:| :-------------:| :-------------:|
-| Qwen2.5-VL-3B-Instruct | 23.09 | 27.99 | 10.15 |
-| Qwen2.5-VL-3B-Instruct-rloo-math | **27.47** | **35.1** | **13.32** |
+Smaller 3B Large Multimodal Models (LMMs) struggle with reasoning tasks due to their limited parameter capacity and the inherent complexity of integrating visual perception with logical reasoning. High-quality multimodal reasoning data is also scarce, further complicating training. To address these challenges, we propose **LMM-R1**, a two-stage rule-based RL framework that efficiently enhances reasoning capabilities:
 
-![wandblog1](./docs/wandb_log_1.png)
+1. **Foundational Reasoning Enhancement (FRE)**: Uses text-only data to build strong reasoning foundations
+2. **Multimodal Generalization Training (MGT)**: Extends these capabilities to multimodal domains
 
-This result reminds us that the existing rich high-quaity text-modality reasoning data maybe beneficial to train a strong multimodal reasoning model, especially at this very moment when high-quality multimodal reasoning data is scarce.
+This approach overcomes data limitations while significantly improving performance across diverse reasoning tasks.
 
-We provide the data `examples/data/mathlv345_8k_chatml.json` and script `examples/scripts/r1_scripts/train_rloo_qwenvl2_5_math.sh` for reproduction. Note that the system prompt of our model is consistent with that of training during evaluation.
+![pipeline](./docs/model.jpg)
+## Demo
+**Geometry Question:**
 
-### More findings are coming...
+![motivation](./docs/motivation.png)
 
-## Features
-- Support LMM training (Qwen2-VL, Qwen2.5-VL).
-- Distributed [PPO](./examples/scripts/train_ppo_llama_ray.sh) and [REINFORCE++/RLOO](./examples/scripts/train_reinforce_llama_ray.sh) implementations based on Ray.  
-- [Ray-based Reinforced Finetuning](./examples/scripts/train_ppo_llama_with_reward_fn.sh)
-- Support Ray-based [PPO](./examples/scripts/train_ppo_llama_ray_hybrid_engine.sh) and [REINFORCE++/RLOO](./examples/scripts/train_reinforce_llama_ray_hybrid_engine.sh) using Hybrid Engine  (`--colocate_all_models`, `--vllm_enable_sleep` and `--vllm_gpu_memory_utilization 0.5`)
-- Full RLHF fine-tuning support for models with [over 70 billion parameters](./examples/scripts/train_ppo_llama_ray_70b.sh).  
-- Integration with vLLM for accelerated generation in RLHF tasks (`--vllm_num_engines`).  
-- Support for multiple reward models (`--reward_pretrain model1,model2...`) and remote reward models (`--remote_rm_url`).
-- Integration of FlashAttention2 (`--flash_attn`).  
-- Support for QLoRA (`--load_in_4bit`) and [LoRA](./examples/scripts/train_sft_mixtral_lora.sh) (`--lora_rank`, `--target_modules`).  
-- Compatibility with HuggingFace's `tokenizer.apply_chat_template` for datasets (`--apply_chat_template` and `--input_key`).  
-- Logging support with Wandb (`--use_wandb`) and TensorBoard (`--use_tensorboard`).  
-- Checkpoint recovery functionality (`--load_checkpoint` and `--save_steps`).  
-- Provided multi-node training scripts, such as [Ray PPO](./examples/scripts/train_ppo_llama_ray_slurm.sh).
+**Sokoban Demo:**
 
-
+![sobokan_deom](./docs/sokoban_demo.gif)
+ 
 ## Quick Start
 
 ### Installation
@@ -88,6 +73,7 @@ pip install flash_attn --no-build-isolation
 >We also provided the [Dockerfiles for vLLM](./dockerfile/) and [One-Click Installation Script of Nvidia-Docker](./examples/scripts/nvidia_docker_install.sh).
 
 ### Prepare Datasets
+
 LMM-R1 requires the multimodal prompt dataset to be in OpenAI-compatible message format:
 ```json
 [
@@ -114,115 +100,71 @@ An example dataset `examples/data/test_message.jsonl` is for reference.
 - We can use `--input_key` to specify the `JSON key name` of the input datasets `--prompt_data {name or path}` (PPO) or `--dataset {name or path}`. **Do not** use `--apply_chat_template` for multimodal prompt, the message will be processed internally.
 - OpenRLHF also support mixing multiple datasets using `--prompt_data_probs 0.1,0.4,0.5` (PPO) or `--dataset_probs 0.1,0.4,0.5`.
 
+### Training
 
-How to specify training and test datasets ?
+Our training process follows the two-stage approach described in the paper. We provide scripts for each stage to facilitate reproduction of our results.
 
-You can specify it using the `data_type@data_dir` format. For example, the dataset can be set as `--dataset json@./data`.
+#### Stage 1: Foundational Reasoning Enhancement (FRE)
 
-```
-data
-├── test.jsonl
-└── train.jsonl
-```
-
-> [!NOTE]
-> By default, we use `train` and `test` as splits to distinguish training and testing datasets from Huggingface.
-> The ``JSON key`` options depends on the specific datasets. See [Reward Dataset](https://github.com/OpenRLHF/OpenRLHF/blob/main/openrlhf/datasets/reward_dataset.py#L10) and [SFT Dataset](https://github.com/OpenRLHF/OpenRLHF/blob/main/openrlhf/datasets/sft_dataset.py#L9)
-
-
-### LMM RLOO with Ray
-> [!NOTE]
-> Set `--train-vlm` for LMM training.
+This stage focuses on enhancing the model's reasoning capabilities using text-only data.
 
 ```bash
-DATASET="test_message.jsonl"
-MODEL_CPK_NAME="qwenvl25_3B_ins_rloo_mathvision"
-PRETRAIN_MODEL="Qwen/Qwen2.5-VL-3B-Instruct"
-SAVE_PATH="/ckpts"
-mkdir -p "${SAVE_PATH}/${MODEL_CPK_NAME}"
+# Train with text-only data (FRE-Text)
+bash examples/scripts/lmm_r1/train_fre_text.sh
 
-# deploy remote reward function at 127.0.0.1:5000
-python -m openrlhf.models.remote_rm.math_verifier --dataset $DATASET --input_key message --prompt-template chatml > "${SAVE_PATH}/${MODEL_CPK_NAME}/remote_rm.log" 2>&1 &
-childpid=$!
-
-ray start --head --node-ip-address 0.0.0.0 --num-gpus 8 --temp-dir ~/.cache/ray
-
-ray job submit --address="http://127.0.0.1:8265" \
-   --runtime-env-json='{"working_dir": "/root/projects/OpenRLHF"}' \
-   -- python3 -m openrlhf.cli.train_ppo_ray \
-   --ref_num_nodes 1 \
-   --ref_num_gpus_per_node 8 \
-   --remote_rm_url http://127.0.0.1:5000/get_reward \
-   --actor_num_nodes 1 \
-   --actor_num_gpus_per_node 8 \
-   --vllm_num_engines 8 \
-   --vllm_tensor_parallel_size 1 \
-   --colocate_all_models \
-   --vllm_enable_sleep \
-   --vllm_gpu_memory_utilization 0.7 \
-   --vllm_sync_backend gloo \
-   --enable_prefix_caching \
-   --pretrain $PRETRAIN_MODEL \
-   --save_path $SAVE_PATH/$MODEL_CPK_NAME \
-   --micro_train_batch_size 2 \
-   --train_batch_size 128 \
-   --micro_rollout_batch_size 4 \
-   --rollout_batch_size 256 \
-   --temperature 1 \
-   --n_samples_per_prompt 16 \
-   --max_epochs 1 \
-   --num_episodes 30 \
-   --prompt_max_len 4096 \
-   --max_samples 100000 \
-   --generate_max_len 4096 \
-   --advantage_estimator rloo \
-   --zero_stage 3 \
-   --bf16 \
-   --actor_learning_rate 1e-6 \
-   --init_kl_coef 0.01 \
-   --prompt_data $DATASET \
-   --input_key message \
-   --normalize_reward \
-   --flash_attn \
-   --gradient_checkpointing \
-   --save_steps 10 \
-   --ckpt_path $SAVE_PATH/$MODEL_CPK_NAME/ckpt \
-   --save_hf_ckpt \
-   --use_tensorboard $SAVE_PATH/$MODEL_CPK_NAME/logs \
-   --train_vlm
-
-ray stop
-kill $childpid
+# Train with multimodal data (FRE-Multi) for comparison
+bash examples/scripts/lmm_r1/train_fre_multi.sh
 ```
 
-> [!NOTE]
-> Not set `--vllm_num_engines` means not using the vLLM engine.
+The FRE-Text script uses the DeepScaler-40K dataset with rule-based RL to enhance the model's foundational reasoning capabilities. This stage is crucial for establishing strong reasoning abilities before moving to multimodal tasks.
+
+#### Stage 2: Multimodal Generalization Training (MGT)
+
+This stage extends the reasoning capabilities to multimodal domains through continued training on specific tasks.
+
+```bash
+# Train on geometry domain (MGT-Geo)
+bash examples/scripts/lmm_r1/train_mgt_geo.sh
+
+# Train on perception-reasoning balanced domain (MGT-PerceReason)
+bash examples/scripts/lmm_r1/train_mgt_percereas.sh
+```
+
+Each MGT script continues training from the FRE-Text checkpoint, focusing on a specific domain:
+- **MGT-Geo**: Uses VerMulti-Geo dataset (15K geometry problems) to enhance geometric reasoning
+- **MGT-PerceReason**: Uses the full VerMulti dataset to balance perception and reasoning capabilities
+
+#### Direct RL Training (for comparison)
+
+We also provide scripts for direct RL training without the FRE stage, which we use as comparison baselines in our paper:
+
+```bash
+# Direct RL training on geometry domain
+bash examples/scripts/lmm_r1/train_direct_rl_geo.sh
+```
+
+These scripts train the baseline model directly on domain-specific data, skipping the FRE stage, which helps demonstrate the effectiveness of our two-stage approach.
+
+## Features
 
 
-> [!NOTE]
-> RLOO and REINFORCE++-baseline in OPENRLHF are a modification based on REINFORCE++:
-> - REINFORCE++ integrates key optimization techniques from PPO while eliminating the need for a critic network.
-> - REINFORCE++-baseline uses the mean reward of multiple samples from the same prompt as the baseline.
-> - RLOO in OpenRLHF modifies the original version by incorporating the `per-token KL reward` and utilizing the `PPO-clip loss`.
+LMM-R1 is a fork of [OpenRLHF](https://github.com/OpenRLHF/OpenRLHF), aimed at providing high-performance LMM Reinforcement Learning infrastructure for enhancing multimodal reasoning capabilities. We currently support PPO/REINFORCE++/RLOO training for LMM, and achieve 4.7x speedup (RLOO) compared with [R1-V](https://github.com/Deep-Agent/R1-V) (GRPO).
+
+![time_compare](./docs/time_compare.jpg)
 
 
-> [!NOTE]
-> If you encounter an error related to index out of range when deepspeed sets up the GPU devices, you can try to set the environment variable [`RAY_EXPERIMENTAL_NOSET_*_VISIBLE_DEVICES`](openrlhf/trainer/ray/utils.py) as a workaround.
->   ```bash
->   # For NVIDIA GPUs:
->   export RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES=1
->   ```
-
-
-### Performance Tuning Guide
-
-To achieve optimal performance, we recommend allocating nodes number `vLLM:Actor:Critic = 1:1:1`. For example, for a 70B model with 48 A100 GPUs, it is advised to allocate 16 A100 GPUs to the vLLM Engine, 16 GPUs to the Actor model, and the remaining 16 GPUs to the Critic model. Additionally, enable the `--colocate_critic_reward`, `--colocate_actor_ref` options to merge nodes. Finally, you should increase the `rollout_micro_batch_size` (and minimize the TP size of vLLM engine) as much as possible. During the training phase, a larger `--micro_train_batch_size` is better and enable `--packing_samples` (Not supported for LMM). When there are enough GPUs, please disable `--adam_offload` and enable `--overlap_comm`. For multi-nodes RLHF, please use `--vllm_sync_backend nccl` with vLLM 0.7.2+. Enable `enable_prefix_caching` in vLLM generation when ``n_samples_per_prompts`` > 1. Using hybrid engine `--colocate_all_models` and ``–vllm_enable_sleep``rather than distributed RLHF when the model size and context length are small values.
-
-
-## Starchart
-
-[![Star History Chart](https://api.star-history.com/svg?repos=TideDra/lmm-r1&type=Date)](https://star-history.com/#TideDra/lmm-r1&Date)
-
+- Support LMM training (Qwen2-VL, Qwen2.5-VL).
+- Distributed [PPO](./examples/scripts/train_ppo_llama_ray.sh) and [REINFORCE++/RLOO](./examples/scripts/train_reinforce_llama_ray.sh) implementations based on Ray.  
+- [Ray-based Reinforced Finetuning](./examples/scripts/train_ppo_llama_with_reward_fn.sh)
+- Support Ray-based [PPO](./examples/scripts/train_ppo_llama_ray_hybrid_engine.sh) and [REINFORCE++/RLOO](./examples/scripts/train_reinforce_llama_ray_hybrid_engine.sh) using Hybrid Engine  (`--colocate_all_models`, `--vllm_enable_sleep` and `--vllm_gpu_memory_utilization 0.5`)
+- Full RLHF fine-tuning support for models with [over 70 billion parameters](./examples/scripts/train_ppo_llama_ray_70b.sh).  
+- Integration with vLLM for accelerated generation in RLHF tasks (`--vllm_num_engines`).  
+- Support for multiple reward models (`--reward_pretrain model1,model2...`) and remote reward models (`--remote_rm_url`).
+- Integration of FlashAttention2 (`--flash_attn`).  
+- Support for QLoRA (`--load_in_4bit`) and [LoRA](./examples/scripts/train_sft_mixtral_lora.sh) (`--lora_rank`, `--target_modules`).  
+- Logging support with Wandb (`--use_wandb`) and TensorBoard (`--use_tensorboard`).  
+- Checkpoint recovery functionality (`--load_checkpoint` and `--save_steps`).  
+- Provided multi-node training scripts, such as [Ray PPO](./examples/scripts/train_ppo_llama_ray_slurm.sh).
 
 ## References & Acknowledgements
 We sincerely thank [DeepSeek](https://github.com/deepseek-ai/DeepSeek-R1) for their exploration on LLM reasoning, and [OpenRLHF](https://github.com/OpenRLHF/OpenRLHF) for their incredible RL infrastructure. We also thank [open-r1](https://github.com/huggingface/open-r1) and [simpleRL-reason](https://github.com/hkust-nlp/simpleRL-reason) which give us insights on reproduction of R1. Yingzhe Peng's work was completed during his internship at Ant Group, and Kai Yang is his intern mentor. Special thanks to [Kai Yang](https://github.com/yangkai798), [Jie Liu](https://jieliu.site/), [ZhiYuan You](https://zhiyuanyou.github.io/) for their valuable suggestions, and [the Big Data Computing Center of Southeast University](https://bdcc.seu.edu.cn/) for the hardware support.
@@ -233,13 +175,14 @@ We sincerely thank [DeepSeek](https://github.com/deepseek-ai/DeepSeek-R1) for th
 - [simpleRL-reason](https://github.com/hkust-nlp/simpleRL-reason)
 
 ## Citation
+If you find LMM-R1 useful for your research and applications, please cite using this BibTeX:
 
 ```bib
-@misc{peng2025lmmr1,
-  author       = {YingZhe Peng and Gongrui Zhang and Xin Geng and Xu Yang},
-  title        = {LMM-R1},
-  howpublished = {\url{https://github.com/TideDra/lmm-r1}},
-  note         = {Accessed: 2025-02-13},
-  year         = {2025}
+@article{peng2025lmmr1,
+  title={LMM-R1: Empowering 3B LMMs with Strong Reasoning Abilities Through Two-Stage Rule-Based RL},
+  author={Peng, Yingzhe and Zhang, Gongrui and Zhang, Miaosen and You, Zhiyuan and Liu, Jie and Zhu, Qipeng and Yang, Kai and Xu, Xingzhong and Geng, Xin and Yang, Xu},
+  journal={arXiv preprint arXiv:2503.07536},
+  year={2025}
 }
 ```
+

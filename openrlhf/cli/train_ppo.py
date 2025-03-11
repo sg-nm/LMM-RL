@@ -261,6 +261,8 @@ def train(args):
         max_length=args.max_len,
         temperature=args.temperature,
         top_p=args.top_p,
+        min_pixels=args.min_pixels,
+        max_pixels=args.max_pixels,
         pad_token_id=tokenizer.pad_token_id,
         eos_token_id=tokenizer.eos_token_id,
         # remote reward model
@@ -332,17 +334,18 @@ if __name__ == "__main__":
     parser.add_argument("--kl_target", type=float, default=None)
     parser.add_argument("--init_kl_coef", type=float, default=0.01, help="KL penalty in PPO")
     parser.add_argument(
-        "--use_kl_estimator_k3",
-        action="store_true",
-        default=False,
+        "--kl_estimator",
+        type=str,
+        default="k1",
+        choices=["k1", "k2", "k3"],
         help=(
-            "Use the k3 estimator in http://joschu.net/blog/kl-approx.html"
-            "to ensure the KL divergence calculated is non-negative"
+            "In GRPO, k3 is utilized as the loss function, while k2, when used as the loss, is nearly equivalent to k1."
         ),
     )
     parser.add_argument("--adam_betas", type=float, nargs=2, default=(0.9, 0.95), help="Betas for Adam optimizer")
     parser.add_argument("--reward_clip_range", type=float, nargs=2, default=(-10, 10), help="Reward clip range")
-
+    parser.add_argument("--max_pixels",type=int,default=640*28*28,help="Max pixels for image")
+    parser.add_argument("--min_pixels",type=int,default=4*28*28,help="Min pixels for image")
     # DeepSpeed
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--local_rank", type=int, default=-1, help="local_rank for deepspeed")
@@ -359,7 +362,6 @@ if __name__ == "__main__":
     parser.add_argument("--overlap_comm", action="store_true", default=False)
     parser.add_argument("--gradient_checkpointing_use_reentrant", action="store_true", default=False)
     parser.add_argument("--disable_fast_tokenizer", action="store_true", default=False)
-    parser.add_argument("--train_vlm", action="store_true", default=False)
     parser.add_argument("--freeze_prefix", type=str, nargs="+", default=None,
         help="List of parameter name prefixes to freeze during training"
     )
@@ -369,10 +371,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--advantage_estimator",
         type=str,
-        choices=["gae", "reinforce", "rloo", "reinforce_baseline"],
+        choices=["gae", "reinforce", "rloo", "reinforce_baseline", "group_norm"],
         default="gae",
-        help="Choose advantage estimation method: gae, reinforce, rloo, reinforce_baseline",
+        help="Choose advantage estimation method: gae, reinforce, rloo, reinforce_baseline, group_norm",
     )
+
+    parser.add_argument("--use_kl_loss", action="store_true", default=False, help="whether to use KL loss from GRPO")
 
     # LoRA
     parser.add_argument("--load_in_4bit", action="store_true", default=False)
@@ -406,6 +410,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--pretrain_split", type=str, default="train")
     parser.add_argument("--input_key", type=str, default="input", help="JSON dataset key")
+    parser.add_argument("--label_key", type=str, default=None, help="JSON dataset key")
     parser.add_argument("--input_template", type=str, default=None)
     parser.add_argument(
         "--apply_chat_template", action="store_true", default=False, help="Use HF tokenizer chat template"
@@ -438,8 +443,15 @@ if __name__ == "__main__":
         else:
             args.critic_pretrain = args.pretrain
 
-    if args.advantage_estimator in ["rloo", "reinforce_baseline"]:
-        assert args.n_samples_per_prompt > 1, "RLOO/REINFORCE++-baseline requires n_samples_per_prompt > 1"
+    if args.advantage_estimator in ["rloo", "reinforce_baseline", "group_norm"]:
+        assert args.n_samples_per_prompt > 1, f"{args.advantage_estimator} requires n_samples_per_prompt > 1"
+
+    if args.use_kl_loss:
+        if args.kl_estimator not in ["k2", "k3"]:
+            print(f"Recommend setting {args.kl_estimator} to 'k2' or 'k3' when using KL as a loss")
+    else:
+        if args.kl_estimator not in ["k1"]:
+            print(f"Recommend setting {args.kl_estimator} to 'k1' when not using KL as a loss.")
 
     if args.input_template and "{}" not in args.input_template:
         print("[Warning] {} not in args.input_template, set to None")
@@ -450,13 +462,10 @@ if __name__ == "__main__":
             "[Warning] input_template contains \\n chracters instead of newline. "
             "You likely want to pass $'\\n' in Bash or \"`n\" in PowerShell."
         )
-    if args.train_vlm: 
-        if args.packing_samples:
-            print("[Warning] --train_vlm is not supported with --packing_samples. We will set args.packing_samples to False")
-            args.packing_samples = False
-        if args.pretrain_data:
-            print("[Warning] --train_vlm is not supported with --pretrain_data. We will set args.pretrain_data to None")
-            args.pretrain_data = None
+
+    if args.pretrain_data:
+        print("[Warning] lmm-r1 is not supported with --pretrain_data. We will set args.pretrain_data to None")
+        args.pretrain_data = None
 
     if args.use_ms:
         from modelscope.utils.hf_util import patch_hub

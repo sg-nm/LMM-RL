@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 
 from .experience_maker import Experience
-from .data_processor import BaseDataProcessor
+from openrlhf.models.lmm_kits.base.data_processor import BaseDataProcessor
 
 @dataclass
 class BufferItem:
@@ -17,6 +17,7 @@ class BufferItem:
     Shapes of each tensor:
     sequences: (S)
     action_log_probs: (A)
+    base_action_log_probs: (A)
     values: (1)
     returns: (1)
     advantages: (1)
@@ -28,6 +29,7 @@ class BufferItem:
 
     sequences: torch.Tensor
     action_log_probs: torch.Tensor
+    base_action_log_probs: torch.Tensor
     values: torch.Tensor
     returns: torch.Tensor
     advantages: torch.Tensor
@@ -43,6 +45,7 @@ def split_experience_batch(experience: Experience, data_processor: Optional[Base
     keys = (
         "sequences",
         "action_log_probs",
+        "base_action_log_probs",
         "values",
         "returns",
         "advantages",
@@ -61,16 +64,14 @@ def split_experience_batch(experience: Experience, data_processor: Optional[Base
         assert batch_size == len(vals)
         for i, v in enumerate(vals):
             batch_kwargs[i][key] = v
-    if data_processor is not None:
-        visual_inputs_batch = experience.visual_inputs
-        visual_inputs_batch['input_ids'] = experience.sequences
-        visual_inputs_chunks = data_processor.split_input_batch(visual_inputs_batch)
-        for i, visual_inputs in enumerate(visual_inputs_chunks):
-            visual_inputs.pop('input_ids')
-            batch_kwargs[i]["visual_inputs"] = visual_inputs
-    else:
-        for i in range(batch_size):
-            batch_kwargs[i]["visual_inputs"] = None
+    
+    visual_inputs_batch = experience.visual_inputs
+    visual_inputs_batch['input_ids'] = experience.sequences
+    visual_inputs_chunks = data_processor.split_input_batch(visual_inputs_batch)
+    for i, visual_inputs in enumerate(visual_inputs_chunks):
+        visual_inputs.pop('input_ids')
+        batch_kwargs[i]["visual_inputs"] = visual_inputs
+
 
     for i in range(batch_size):
         batch_kwargs[i]["info"] = {}
@@ -103,6 +104,7 @@ def make_experience_batch(items: List[BufferItem], data_processor: Optional[Base
     keys = (
         "sequences",
         "action_log_probs",
+        "base_action_log_probs",
         "values",
         "returns",
         "advantages",
@@ -121,16 +123,17 @@ def make_experience_batch(items: List[BufferItem], data_processor: Optional[Base
     for key in items[0].info.keys():
         vals = torch.tensor([item.info[key] for item in items])
         kwargs["info"][key] = vals
-    if data_processor is not None:
-        kwargs["visual_inputs"] = data_processor.make_input_batch([item.visual_inputs for item in items])
+    
+    kwargs["visual_inputs"] = data_processor.make_input_batch([item.visual_inputs for item in items])
     return Experience(**kwargs)
 
 
 def remove_padding_in_sequences(items):
     for item in items:
-        seq, act_log_prob, value, ret, adv, att_mask, act_mask = (
+        seq, act_log_prob, base_act_log_prob, value, ret, adv, att_mask, act_mask = (
             item.sequences,
             item.action_log_probs,
+            item.base_action_log_probs,
             item.values,
             item.returns,
             item.advantages,
@@ -145,6 +148,7 @@ def remove_padding_in_sequences(items):
         (
             item.sequences,
             item.action_log_probs,
+            item.base_action_log_probs,
             item.values,
             item.returns,
             item.advantages,
@@ -153,6 +157,7 @@ def remove_padding_in_sequences(items):
         ) = (
             seq[left_pad:right_pad],
             act_log_prob[:right_pad],
+            base_act_log_prob[:right_pad] if item.base_action_log_probs is not None else None,
             value[:right_pad] if item.values is not None else None,
             ret[:right_pad],
             adv[:right_pad],

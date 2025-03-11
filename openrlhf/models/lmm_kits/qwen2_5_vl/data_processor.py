@@ -1,110 +1,13 @@
-import json
 import os
-from abc import ABC, abstractmethod
-from typing import List, Optional, Union, Dict
+from typing import List, Dict
 
 import torch
 from qwen_vl_utils import process_vision_info
-from transformers import Qwen2VLProcessor
-from transformers.processing_utils import ProcessorMixin
-try:
-    from transformers import Qwen2_5_VLProcessor
-except Exception as e:
-    print("Qocal Qwen2_5_VLProcessor not found")
 
-class BaseDataProcessor(ABC):
-    def __init__(self, processor: ProcessorMixin):
-        super().__init__()
-        self.processor = processor
-
-    @abstractmethod
-    def __call__(
-        self,
-        messages: Union[Dict, List[str], str],
-        max_length: int,
-        padding: bool = True,
-        device: Optional[Union[str, torch.device]] = None,
-        return_tensors: Optional[str] = "pt",
-        add_special_tokens: Optional[bool] = False,
-        truncation: Optional[bool] = True,
-    ) -> Dict:
-        raise NotImplementedError
-
-    @abstractmethod
-    def make_input_batch(self, inputs: List[Dict]) -> Dict:
-        raise NotImplementedError
-
-    @abstractmethod
-    def split_input_batch(self, batch: Dict) -> List[Dict]:
-        raise NotImplementedError
-
-    def _format_messages(self, messages: Union[Dict, List[str], str]) -> List[Dict]:
-        if isinstance(messages, list) and isinstance(messages[0], str):
-            return [json.loads(m) for m in messages]
-        elif isinstance(messages, str):
-            return [json.loads(messages)]
-        elif isinstance(messages, dict):
-            return [messages]
-        else:
-            raise ValueError("Invalid messages format, must be a list of strings or a string or a dict")
-
-    def apply_chat_template(
-        self,
-        messages: Union[Dict, List[str], str],
-        tokenize: bool = False,
-        add_generation_prompt: bool = True,
-    ) -> List[str]:
-        messages = self._format_messages(messages)
-        
-        return self.processor.apply_chat_template(
-            messages, tokenize=tokenize, add_generation_prompt=add_generation_prompt
-        )
-
-    def get_images_from_messages(
-        self, messages: Union[Dict, List[str], str]
-    ) -> List[Dict]:
-        messages = self._format_messages(messages)
-        return self._get_images_from_messages(messages)
-
-    @abstractmethod
-    def _get_images_from_messages(self, messages: List[Dict]) -> List[Dict]:
-        raise NotImplementedError
-
-    @property
-    def pad_token_id(self) -> int:
-        return self.processor.tokenizer.pad_token_id
-
-    @property
-    def eos_token_id(self) -> int:
-        return self.processor.tokenizer.eos_token_id
-
-    @property
-    def tokenizer(self):
-        return self.processor.tokenizer
+from ..base.data_processor import BaseDataProcessor
 
 
-def add_pixel_bounds(messages):
-    # 默认的像素范围
-    DEFAULT_MIN_PIXELS = int(os.getenv("MIN_PIXELS", 4 * 28 * 28))
-    DEFAULT_MAX_PIXELS = int(os.getenv("MAX_PIXELS", 640 * 28 * 28))
-
-    def process_content(content):
-        if isinstance(content, list):
-            for item in content:
-                if isinstance(item, dict) and item.get("type") == "image":
-                    if "min_pixels" not in item:
-                        item["min_pixels"] = DEFAULT_MIN_PIXELS
-                    if "max_pixels" not in item:
-                        item["max_pixels"] = DEFAULT_MAX_PIXELS
-        return content
-
-    for message in messages:
-        for msg in message:
-            msg["content"] = process_content(msg["content"])
-    return messages
-
-
-class Qwen2VLDataProcessor(BaseDataProcessor):
+class Qwen2_5_VLDataProcessor(BaseDataProcessor):
     def __call__(
         self,
         messages,
@@ -120,7 +23,6 @@ class Qwen2VLDataProcessor(BaseDataProcessor):
         texts = processor.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
-        messages = add_pixel_bounds(messages)
         image_inputs, video_inputs = process_vision_info(messages)
 
         batch = processor(
@@ -139,13 +41,16 @@ class Qwen2VLDataProcessor(BaseDataProcessor):
 
     def make_input_batch(self, inputs: List[Dict]) -> Dict:
         # each element has no batch dimension
-        batch = {k: None for k in inputs[0].keys()}
+        batch = {}
+        # collect all keys
+        for inp in inputs:
+            batch.update({k:None for k,v in inp.items() if v is not None})
         for k in batch.keys():
             if k in ["input_ids", "attention_mask"]:
-                batch[k] = torch.stack([inp[k] for inp in inputs], dim=0)
+                batch[k] = torch.stack([inp[k] for inp in inputs if k in inp], dim=0)
             elif k in ["pixel_values", "image_grid_thw"]:
                 # qwen2vl concat all patches of all images in a batch in the first dimension
-                batch[k] = torch.cat([inp[k] for inp in inputs], dim=0)
+                batch[k] = torch.cat([inp[k] for inp in inputs if k in inp], dim=0)
             else:
                 raise ValueError(f"Unknown key {k} for Qwen2VLDataProcessor")
         return batch
@@ -209,14 +114,7 @@ class Qwen2VLDataProcessor(BaseDataProcessor):
             assert len(thws) == 0
             assert len(pixel_values) == 0
         return batch_kwargs
+    
+DataProcessor = Qwen2_5_VLDataProcessor
 
-    def _get_images_from_messages(self, messages: List[Dict]) -> List[Dict]:
-        messages = add_pixel_bounds(messages)
-        image_inputs, _ = process_vision_info(messages)
-        return image_inputs
-
-
-DATA_PROCESSOR_MAP = {
-    Qwen2VLProcessor: Qwen2VLDataProcessor,
-    Qwen2_5_VLProcessor: Qwen2VLDataProcessor,   
-}
+__all__ = ["DataProcessor"]

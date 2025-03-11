@@ -10,6 +10,8 @@ from flask import Flask, jsonify, request
 from latex2sympy2_extended import NormalizationConfig
 from math_verify import LatexExtractionConfig, parse, verify
 
+from loguru import logger
+from concurrent import futures
 app = Flask(__name__)
 
 problem_to_answer = {}
@@ -50,47 +52,44 @@ def find_similar_problem(problem):
     return target_problem
 
 
-def verify_math(input_queue, output_queue):
-    while True:
-        content, sol = input_queue.get()
-        gold_parsed = parse(
-            sol,
+def verify_math(content,sol):
+    gold_parsed = parse(
+        sol,
+        extraction_mode="first_match",
+        extraction_config=[LatexExtractionConfig()],
+    )
+    if len(gold_parsed) != 0:
+        # We require the answer to be provided in correct latex (no malformed operators)
+        answer_parsed = parse(
+            content,
+            extraction_config=[
+                LatexExtractionConfig(
+                    normalization_config=NormalizationConfig(
+                        nits=False,
+                        malformed_operators=False,
+                        basic_latex=True,
+                        equations=True,
+                        boxed=True,
+                        units=True,
+                    ),
+                    # Ensures that boxed is tried first
+                    boxed_match_priority=0,
+                    try_extract_without_anchor=False,
+                )
+            ],
             extraction_mode="first_match",
-            extraction_config=[LatexExtractionConfig()],
         )
-        if len(gold_parsed) != 0:
-            # We require the answer to be provided in correct latex (no malformed operators)
-            answer_parsed = parse(
-                content,
-                extraction_config=[
-                    LatexExtractionConfig(
-                        normalization_config=NormalizationConfig(
-                            nits=False,
-                            malformed_operators=False,
-                            basic_latex=True,
-                            equations=True,
-                            boxed=True,
-                            units=True,
-                        ),
-                        # Ensures that boxed is tried first
-                        boxed_match_priority=0,
-                        try_extract_without_anchor=False,
-                    )
-                ],
-                extraction_mode="first_match",
-            )
-            # Reward 1 if the content is the same as the ground truth, 0 otherwise
-            try:
-                reward = float(verify(answer_parsed, gold_parsed))
-            except Exception as e:
-                reward = 1.0
-                print("Failed to verify: ", e)
-        else:
-            # If the gold solution is not parseable, we reward 1 to skip this example
+        # Reward 1 if the content is the same as the ground truth, 0 otherwise
+        try:
+            reward = float(verify(answer_parsed, gold_parsed))
+        except Exception as e:
             reward = 1.0
-            print("Failed to parse gold solution: ", sol)
-
-        output_queue.put(reward)
+            print("Failed to verify: ", e)
+    else:
+        # If the gold solution is not parseable, we reward 1 to skip this example
+        reward = 1.0
+        print("Failed to parse gold solution: ", sol)
+    return reward
 
 
 @app.route("/get_reward", methods=["POST"])
@@ -101,6 +100,8 @@ def get_reward():
     if "query" not in data:
         return jsonify({"error": "queries field is required"}), 400
     rewards = []
+    format_rewards = []
+    acc_rewards_futures = []
     for q,problem in zip(data["query"],data["prompts"]):
         if problem is None:
             return jsonify({"error": f"problem not found from {q}"}), 400
@@ -112,18 +113,21 @@ def get_reward():
         response = get_response_from_query(q) or q
         if response is None:
             return jsonify({"error": f"response not found from {q}"}), 400
-        format_reward = float(verify_format(response))
-        input_queue.put((response, answer))
-        acc_reward = float(output_queue.get())
+        format_reward = float(verify_format(response)) * 0.5
+        acc_reward_future = math_verify_executor.submit(verify_math, response, answer)
+       
         do_print = random.randint(1, 20) == 1
         if do_print:
-            info=f"Query: {q}\n\nProblem: {problem}\n\n Answer: {answer}\n\n Response: {response}\n\n Format Reward: {format_reward}\n\n Acc Reward: {acc_reward}\n\n"
+            info=f"Query: {q}\n\nProblem: {problem}\n\n Answer: {answer}\n\n Response: {response}\n\n Format Reward: {format_reward}\n\n Acc Reward: {acc_reward_future.result()}\n\n"
             info = re.sub(r"<\|.*?\|>","",info)
-            print(info)
+            logger.info(info)
             
-        rewards.append(0.5 * format_reward + acc_reward)
+        format_rewards.append(format_reward)
+        acc_rewards_futures.append(acc_reward_future)
+    acc_rewards = [f.result() for f in acc_rewards_futures]
+    rewards = [f + a for f, a in zip(format_rewards, acc_rewards)]
     # 返回包含 rewards 的响应
-    return jsonify({"rewards": rewards})
+    return jsonify({"rewards": rewards,"format_rewards":format_rewards,"acc_rewards":acc_rewards})
 
 
 if __name__ == "__main__":
@@ -137,8 +141,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--input_key", type=str, default="prompt", help="The key name of prompt."
     )
+    parser.add_argument("--log_file", type=str, default="remote_rm.log", help="Log file path")
     args = parser.parse_args()
-    
+    logger.remove()
+    logger.add(args.log_file)
     # Split dataset paths and load all datasets
     dataset = []
     for dataset_path in args.dataset.split(','):
@@ -175,10 +181,7 @@ if __name__ == "__main__":
         problem_to_answer[problem] = answer
 
     # math_verify can only run in main thread
-    input_queue = Queue()
-    output_queue = Queue()
-    p = Process(target=verify_math, args=(input_queue, output_queue))
-    p.start()
+    math_verify_executor = futures.ProcessPoolExecutor(max_workers=16)
 
     app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
-    p.kill()
+    math_verify_executor.shutdown()

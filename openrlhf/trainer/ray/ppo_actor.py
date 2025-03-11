@@ -12,10 +12,13 @@ from transformers.trainer import get_scheduler
 
 from openrlhf.datasets import PromptDataset, SFTDataset
 from openrlhf.models import Actor
+from openrlhf.models.lmm_kits.utils import get_data_processor
 from openrlhf.trainer import PPOTrainer
 from openrlhf.trainer.ppo_utils import Experience, RemoteExperienceMaker
-from openrlhf.utils import blending_datasets, get_tokenizer, get_vl_processor
+from openrlhf.trainer.ray.vllm_engine import batch_vllm_engine_call
+from openrlhf.utils import blending_datasets
 from openrlhf.utils.deepspeed import DeepspeedStrategy
+from openrlhf.utils.deepspeed.deepspeed_utils import offload_deepspeed_states, reload_deepspeed_states
 from openrlhf.utils.distributed_util import init_process_group
 
 from .launcher import BasePPORole
@@ -128,32 +131,45 @@ class ActorPPOTrainer(PPOTrainer):
 
         # 2. triger remote critic model training
         if self.critic_train_remote:
+            # sync for deepspeed_enable_sleep
+            if self.strategy.args.deepspeed_enable_sleep:
+                ray.get(self.critic.reload_states.remote())
+
             critic_status_ref = self.critic.fit.remote()
-            # sync for colocate_all_models
-            if self.strategy.args.colocate_all_models:
+
+            if self.strategy.args.colocate_all_models or self.strategy.args.deepspeed_enable_sleep:
                 status.update(ray.get(critic_status_ref))
+            if self.strategy.args.deepspeed_enable_sleep:
+                ray.get(self.critic.offload_states.remote())
 
         if self.strategy.args.colocate_all_models:
             torch.distributed.barrier()
 
         # 3. actor model training
         if global_steps > self.freezing_actor_steps:
+            if self.strategy.args.deepspeed_enable_sleep:
+                self.reload_states()
+
             status.update(super().ppo_train(global_steps))
+
+            if self.strategy.args.deepspeed_enable_sleep:
+                self.offload_states()
+
             torch.cuda.empty_cache()
 
             # 4. broadcast weights to vllm engines
             if self.vllm_engines is not None:
-                # vLLM wakeup
                 if self.strategy.args.vllm_enable_sleep:
+                    batch_vllm_engine_call(self.vllm_engines, "wake_up")
+
+                torch.distributed.barrier()
+                torch.cuda.synchronize()
+                self._broadcast_to_vllm()
+
+                if self.strategy.args.vllm_enable_sleep:
+                    batch_vllm_engine_call(self.vllm_engines, "sleep")
                     torch.distributed.barrier()
                     torch.cuda.synchronize()
-                    if torch.distributed.get_rank() == 0:
-                        refs = []
-                        for engine in self.vllm_engines:
-                            refs.append(engine.wake_up.remote())
-                        ray.get(refs)
-                torch.distributed.barrier()
-                self._broadcast_to_vllm()
 
         # 5. wait remote critic model training done
         if self.critic_train_remote and not self.strategy.args.colocate_all_models:
@@ -257,7 +273,7 @@ class ActorPPOTrainer(PPOTrainer):
             save_path = os.path.join(args.ckpt_path, f"{tag}_hf")
             self.strategy.save_model(
                 self.ema_model if args.enable_ema else self.actor,
-                self.processor or self.tokenizer,
+                self.processor,
                 save_path,
             )
         # wait
@@ -265,6 +281,12 @@ class ActorPPOTrainer(PPOTrainer):
             if self.critic_train_remote:
                 ray.get(ref)
         torch.distributed.barrier()
+
+    def reload_states(self):
+        reload_deepspeed_states(self.actor.model)
+
+    def offload_states(self):
+        offload_deepspeed_states(self.actor.model)
 
 
 @ray.remote(num_gpus=1)
@@ -305,16 +327,11 @@ class ActorModelRayActor(BasePPORole):
             strategy.print(f"Froze {frozen_count}/{total_params} parameters based on prefixes: {strategy.args.freeze_prefix}")
 
         # configure tokenizer
-        if args.train_vlm:
-            self.processor = get_vl_processor(
-                pretrain, actor.model, "left", strategy, use_fast=not strategy.args.disable_fast_tokenizer
-            )
-            self.tokenizer = self.processor.tokenizer
-        else:
-            self.processor = None
-            self.tokenizer = get_tokenizer(
-                pretrain, actor.model, "left", strategy, use_fast=not strategy.args.disable_fast_tokenizer
-            )
+        
+        self.data_processor = get_data_processor(
+            pretrain, actor.model, "left", strategy, use_fast=not strategy.args.disable_fast_tokenizer
+        )
+        self.tokenizer = self.data_processor.tokenizer
 
         if args.enable_ema:
             ema_model = Actor(
@@ -376,6 +393,10 @@ class ActorModelRayActor(BasePPORole):
             self.consumed_samples = states["consumed_samples"]
             strategy.print(f"Loaded the checkpoint: {ckpt_path}, consumed_samples: {self.consumed_samples}")
 
+        # initial offload
+        if strategy.args.deepspeed_enable_sleep:
+            offload_deepspeed_states(self.actor.model)
+
     def prepare_datasets(self):
         strategy = self.strategy
         args = self.strategy.args
@@ -395,7 +416,10 @@ class ActorModelRayActor(BasePPORole):
             prompts_data, self.tokenizer, strategy, input_template=args.input_template
         )
         self.prompts_dataloader = strategy.setup_dataloader(
-            self.prompts_dataset, args.rollout_batch_size // strategy.world_size, True, True
+            self.prompts_dataset,
+            args.rollout_batch_size // (strategy.world_size // strategy.ring_attn_size),
+            True,
+            True,
         )
 
         if args.pretrain_data:
@@ -473,8 +497,7 @@ class ActorModelRayActor(BasePPORole):
             micro_rollout_batch_size=args.micro_rollout_batch_size,
             gradient_checkpointing=args.gradient_checkpointing,
             critic_train_remote=critic_train_remote,
-            tokenizer=self.tokenizer,
-            processor=self.processor, 
+            data_processor=self.data_processor,
             prompt_max_len=args.prompt_max_len,
             value_clip=args.value_clip,
             eps_clip=args.eps_clip,
@@ -491,6 +514,8 @@ class ActorModelRayActor(BasePPORole):
             max_length=args.max_len,
             temperature=args.temperature,
             top_p=args.top_p,
+            min_pixels=args.min_pixels,
+            max_pixels=args.max_pixels,
             pad_token_id=self.tokenizer.pad_token_id,
             eos_token_id=self.tokenizer.eos_token_id,
             save_hf_ckpt=args.save_hf_ckpt,
@@ -500,8 +525,19 @@ class ActorModelRayActor(BasePPORole):
         # broadcast checkpoint
         ckpt_path = os.path.join(args.ckpt_path, "_actor")
         if args.load_checkpoint and os.path.exists(ckpt_path) and not vllm_engines is None:
+            # vLLM wakeup when vllm_enable_sleep
+            if self.strategy.args.vllm_enable_sleep:
+                batch_vllm_engine_call(self.vllm_engines, "wake_up")
             torch.distributed.barrier()
+            torch.cuda.synchronize()
+
             trainer._broadcast_to_vllm()
+
+            # vLLM offload when vllm_enable_sleep
+            if self.strategy.args.vllm_enable_sleep:
+                batch_vllm_engine_call(self.vllm_engines, "sleep")
+                torch.distributed.barrier()
+                torch.cuda.synchronize()
 
         trainer.fit(
             args,
@@ -517,6 +553,6 @@ class ActorModelRayActor(BasePPORole):
         # save model checkpoint after fitting on only rank0
         self.strategy.save_model(
             self.ema_model if args.enable_ema else self.actor,
-            self.processor or self.tokenizer,
+            self.data_processor.processor,
             args.save_path,
         )

@@ -13,7 +13,11 @@ ray job submit --address="http://127.0.0.1:8265" \
    --vllm_tensor_parallel_size 2 \
    --colocate_all_models \
    --vllm_gpu_memory_utilization 0.6 \
-   --advantage_estimator reinforce \
+   --init_kl_coef 1e-3 \
+   --gamma 1.0 \
+   --use_kl_loss \
+   --kl_estimator k3 \
+   --advantage_estimator group_norm \
    --pretrain OpenRLHF/Llama-3-8b-sft-mixture \
    --reward_pretrain OpenRLHF/Llama-3-8b-rm-700k \
    --save_path /openrlhf/examples/test_scripts/final/llama3-8b-rlhf \
@@ -32,7 +36,6 @@ ray job submit --address="http://127.0.0.1:8265" \
    --bf16 \
    --actor_learning_rate 5e-7 \
    --critic_learning_rate 9e-6 \
-   --init_kl_coef 1e-4 \
    --prompt_data OpenRLHF/prompt-collection-v0.1 \
    --input_key context_messages \
    --apply_chat_template \
@@ -45,7 +48,4 @@ ray job submit --address="http://127.0.0.1:8265" \
    --deepspeed_enable_sleep
 
 # You could also try
-#   --use_kl_loss \
-#   --kl_estimator k3 | k2 \
-
-# also supports --advantage_estimator rloo | reinforce_baseline
+#   --kl_estimator k2 \

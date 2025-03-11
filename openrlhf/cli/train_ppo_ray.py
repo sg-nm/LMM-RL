@@ -42,6 +42,13 @@ def _validate_args(args):
             actor_world_size % critic_world_size == 0
         ), f"actor_world_size must be divisible by critic_world_size, got {actor_world_size} and {critic_world_size}"
 
+    if args.use_kl_loss:
+        if args.kl_estimator not in ["k2", "k3"]:
+            print(f"Recommend setting {args.kl_estimator} to 'k2' or 'k3' when using KL as a loss")
+    else:
+        if args.kl_estimator not in ["k1"]:
+            print(f"Recommend setting {args.kl_estimator} to 'k1' when not using KL as a loss.")
+
 
 def train(args):
     _validate_args(args)
@@ -52,9 +59,11 @@ def train(args):
     # if colocated, create placement group for actor and ref model explicitly.
     pg = None
     if args.colocate_actor_ref or args.colocate_all_models:
-        assert (
-            args.actor_num_nodes == args.ref_num_nodes and args.actor_num_gpus_per_node == args.ref_num_gpus_per_node
-        ), f"num_nodes and num_gpus_per_node must be the same when colocate actor and ref model."
+        if args.init_kl_coef > 0:
+            assert (
+                args.actor_num_nodes == args.ref_num_nodes
+                and args.actor_num_gpus_per_node == args.ref_num_gpus_per_node
+            ), f"num_nodes and num_gpus_per_node must be the same when colocate actor and ref model."
 
         bundles = [{"GPU": 1, "CPU": 1} for _ in range(args.actor_num_nodes * args.actor_num_gpus_per_node)]
         pg = placement_group(bundles, strategy="PACK")
@@ -64,12 +73,7 @@ def train(args):
     vllm_engines = None
     if args.vllm_num_engines is not None and args.vllm_num_engines > 0:
         max_len = args.max_len if args.max_len else args.prompt_max_len + args.generate_max_len
-        if args.colocate_all_models and args.vllm_gpu_memory_utilization >= 0.9:
-            args.vllm_gpu_memory_utilization = 0.4
-            print(
-                f"Set args.vllm_gpu_memory_utilization to {args.vllm_gpu_memory_utilization} for colocate_all_models!"
-            )
-
+        if args.colocate_all_models:
             assert (
                 args.actor_num_nodes * args.actor_num_gpus_per_node
                 == args.vllm_num_engines * args.vllm_tensor_parallel_size
@@ -87,7 +91,7 @@ def train(args):
             args.enable_prefix_caching,
             args.enforce_eager,
             max_len,
-            args.actor_num_nodes * args.actor_num_gpus_per_node,
+            args.actor_num_nodes * args.actor_num_gpus_per_node // args.ring_attn_size,
             pg if args.colocate_all_models else None,
             args.vllm_gpu_memory_utilization,
             args.vllm_enable_sleep,
@@ -110,7 +114,7 @@ def train(args):
             ReferenceModelRayActor,
             pg=pg,
             num_gpus_per_actor=0.2 if pg else 1,
-    )
+        )
 
     if not args.colocate_all_models:
         pg = None
@@ -271,6 +275,12 @@ if __name__ == "__main__":
     parser.add_argument("--overlap_comm", action="store_true", default=False)
     parser.add_argument("--gradient_checkpointing_use_reentrant", action="store_true", default=False)
     parser.add_argument("--disable_fast_tokenizer", action="store_true", default=False)
+    parser.add_argument(
+        "--deepspeed_enable_sleep",
+        action="store_true",
+        default=False,
+        help="Enable sleep mode for deepspeed when using --colocate_all_models",
+    )
 
     # packing samples using Flash Attention2
     parser.add_argument("--packing_samples", action="store_true", default=False)
@@ -316,30 +326,42 @@ if __name__ == "__main__":
     parser.add_argument("--kl_target", type=float, default=None)
     parser.add_argument("--init_kl_coef", type=float, default=0.01, help="KL penalty in PPO")
     parser.add_argument(
-        "--use_kl_estimator_k3",
-        action="store_true",
-        default=False,
+        "--kl_estimator",
+        type=str,
+        default="k1",
+        choices=["k1", "k2", "k3"],
         help=(
-            "Use the k3 estimator in http://joschu.net/blog/kl-approx.html"
-            "to ensure the KL divergence calculated is non-negative"
+            "In GRPO, k3 is utilized as the loss function, while k2, when used as the loss, is nearly equivalent to k1."
         ),
     )
     parser.add_argument("--aux_loss_coef", type=float, default=0, help="MoE balancing loss")
     parser.add_argument("--adam_betas", type=float, nargs=2, default=(0.9, 0.95), help="Betas for Adam optimizer")
     parser.add_argument("--reward_clip_range", type=float, nargs=2, default=(-10, 10), help="Reward clip range")
-    parser.add_argument("--train_vlm", action="store_true", default=False)
     parser.add_argument("--freeze_prefix", type=str, nargs="+", default=None,
         help="List of parameter name prefixes to freeze during training"
     )
     parser.add_argument("--drop_maxlen", action="store_true", default=False)
-
+    parser.add_argument("--max_pixels",type=int,default=640*28*28,help="Max pixels for image")
+    parser.add_argument("--min_pixels",type=int,default=4*28*28,help="Min pixels for image")
     # Reinforce
     parser.add_argument(
         "--advantage_estimator",
         type=str,
-        choices=["gae", "reinforce", "rloo", "reinforce_baseline"],
+        choices=["gae", "reinforce", "rloo", "reinforce_baseline", "group_norm"],
         default="gae",
-        help="Choose advantage estimation method: gae, reinforce, rloo, reinforce_baseline",
+        help="Choose advantage estimation method: gae, reinforce, rloo, reinforce_baseline, group_norm",
+    )
+    parser.add_argument("--use_kl_loss", action="store_true", default=False, help="whether to use KL loss from GRPO")
+
+    # Context Parallel
+    parser.add_argument("--ring_attn_size", type=int, default=1, help="Ring attention group size")
+    parser.add_argument(
+        "--ring_head_stride",
+        type=int,
+        default=1,
+        help="the number of heads to do ring attention each time. "
+        "It should be a divisor of the number of heads. "
+        "A larger value may results in faster training but will consume more memory.",
     )
 
     #  Models
@@ -369,6 +391,7 @@ if __name__ == "__main__":
     parser.add_argument("--pretrain_split", type=str, default="train")
 
     parser.add_argument("--input_key", type=str, default="input", help="JSON dataset key")
+    parser.add_argument("--label_key", type=str, default=None, help="JSON dataset key")
     parser.add_argument("--input_template", type=str, default=None)
     parser.add_argument(
         "--apply_chat_template", action="store_true", default=False, help="Use HF tokenizer chat template"
@@ -404,8 +427,8 @@ if __name__ == "__main__":
         else:
             args.critic_pretrain = args.pretrain
 
-    if args.advantage_estimator in ["rloo", "reinforce_baseline"]:
-        assert args.n_samples_per_prompt > 1, "RLOO requires n_samples_per_prompt > 1"
+    if args.advantage_estimator in ["rloo", "reinforce_baseline", "group_norm"]:
+        assert args.n_samples_per_prompt > 1, f"{args.advantage_estimator} requires n_samples_per_prompt > 1"
 
     if args.remote_rm_url:
         args.remote_rm_url = args.remote_rm_url.split(",")
@@ -420,13 +443,9 @@ if __name__ == "__main__":
             "You likely want to pass $'\\n' in Bash or \"`n\" in PowerShell."
         )
 
-    if args.train_vlm: 
-        if args.packing_samples:
-            print("[Warning] --train_vlm is not supported with --packing_samples. We will set args.packing_samples to False")
-            args.packing_samples = False
-        if args.pretrain_data:
-            print("[Warning] --train_vlm is not supported with --pretrain_data. We will set args.pretrain_data to None")
-            args.pretrain_data = None
+    if args.pretrain_data:
+        print("[Warning] lmm-r1 is not supported with --pretrain_data. We will set args.pretrain_data to None")
+        args.pretrain_data = None
 
     if args.packing_samples:
         if not args.flash_attn:
