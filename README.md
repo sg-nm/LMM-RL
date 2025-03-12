@@ -29,7 +29,7 @@
 
 <hr>
 
-[![🤗 HF Dataset](https://img.shields.io/badge/🤗-Dataset-yellow)](https://huggingface.co/datasets/TideDra/lmm-r1-data) [![🤗 HF Model](https://img.shields.io/badge/🤗-Model-blue)](https://huggingface.co/TideDra/lmm-r1) [![📄 Paper](https://img.shields.io/badge/📄-Paper-green)](https://arxiv.org/pdf/2503.07536) [![🌐 Project Page](https://img.shields.io/badge/🌐-Project_Page-purple)](https://forjadeforest.github.io/LMM-R1-ProjectPage/)
+[![🤗 HF Dataset](https://img.shields.io/badge/🤗-Dataset-yellow)](https://huggingface.co/datasets/VLM-Reasoner/VerMulti) [![🤗 HF Model](https://img.shields.io/badge/🤗-Model-blue)](https://huggingface.co/VLM-Reasoner/LMM-R1-MGT-PerceReason) [![📄 Paper](https://img.shields.io/badge/📄-Paper-green)](https://arxiv.org/pdf/2503.07536) [![🌐 Project Page](https://img.shields.io/badge/🌐-Project_Page-purple)](https://forjadeforest.github.io/LMM-R1-ProjectPage/)
 
 [Switch to the Chinese version (切换至中文版)](/README_zh.md)
 
@@ -117,7 +117,7 @@ bash examples/scripts/lmm_r1/train_fre_text.sh
 bash examples/scripts/lmm_r1/train_fre_multi.sh
 ```
 
-The FRE-Text script uses the DeepScaler-40K dataset with rule-based RL to enhance the model's foundational reasoning capabilities. This stage is crucial for establishing strong reasoning abilities before moving to multimodal tasks.
+The FRE-Text script uses the [DeepScaler-40K](https://huggingface.co/datasets/VLM-Reasoner/deepscaler) dataset with rule-based RL to enhance the model's foundational reasoning capabilities. This stage is crucial for establishing strong reasoning abilities before moving to multimodal tasks.
 
 #### Stage 2: Multimodal Generalization Training (MGT)
 
@@ -133,7 +133,9 @@ bash examples/scripts/lmm_r1/train_mgt_percereas.sh
 
 Each MGT script continues training from the FRE-Text checkpoint, focusing on a specific domain:
 - **MGT-Geo**: Uses VerMulti-Geo dataset (15K geometry problems) to enhance geometric reasoning
-- **MGT-PerceReason**: Uses the full VerMulti dataset to balance perception and reasoning capabilities
+- **MGT-PerceReason**: Uses the full [VerMulti](https://huggingface.co/datasets/VLM-Reasoner/VerMulti) dataset to balance perception and reasoning capabilities.
+
+We release our final model, [MGT-PerceReason](https://huggingface.co/VLM-Reasoner/LMM-R1-MGT-PerceReason).
 
 #### Direct RL Training (for comparison)
 

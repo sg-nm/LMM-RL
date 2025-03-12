@@ -28,7 +28,7 @@
 
 <hr>
 
-[![🤗 HF 数据集](https://img.shields.io/badge/🤗-数据集-yellow)](https://huggingface.co/datasets/TideDra/lmm-r1-data) [![🤗 HF 模型](https://img.shields.io/badge/🤗-模型-blue)](https://huggingface.co/TideDra/lmm-r1) [![📄 论文](https://img.shields.io/badge/📄-论文-green)](https://arxiv.org/pdf/2503.07536) [![🌐 项目主页](https://img.shields.io/badge/🌐-项目主页-purple)](https://tidedra.github.io/lmm-r1-project/)
+[![🤗 HF 数据集](https://img.shields.io/badge/🤗-数据集-yellow)](https://huggingface.co/datasets/VLM-Reasoner/VerMulti) [![🤗 HF 模型](https://img.shields.io/badge/🤗-模型-blue)](https://huggingface.co/VLM-Reasoner/LMM-R1-MGT-PerceReason) [![📄 论文](https://img.shields.io/badge/📄-论文-green)](https://arxiv.org/pdf/2503.07536) [![🌐 项目主页](https://img.shields.io/badge/🌐-项目主页-purple)](https://tidedra.github.io/lmm-r1-project/)
 
 [切换到英文版 (Switch to English version)](/README.md)
 
@@ -117,7 +117,7 @@ bash examples/scripts/lmm_r1/train_fre_text.sh
 bash examples/scripts/lmm_r1/train_fre_multi.sh
 ```
 
-FRE-Text脚本使用DeepScaler-40K数据集通过规则型强化学习增强模型的基础推理能力。这个阶段对于在进入多模态任务前建立强大的推理能力至关重要。
+FRE-Text脚本使用[DeepScaler-40K](https://huggingface.co/datasets/VLM-Reasoner/deepscaler)数据集通过规则型强化学习增强模型的基础推理能力。这个阶段对于在进入多模态任务前建立强大的推理能力至关重要。
 
 #### 阶段2：多模态泛化训练(MGT)
 
@@ -133,7 +133,9 @@ bash examples/scripts/lmm_r1/train_mgt_percereas.sh
 
 每个MGT脚本都从FRE-Text检查点继续训练，专注于特定领域：
 - **MGT-Geo**：使用VerMulti-Geo数据集(15K几何问题)增强几何推理
-- **MGT-PerceReason**：使用完整的VerMulti数据集平衡感知和推理能力
+- **MGT-PerceReason**：使用完整的[VerMulti]((https://huggingface.co/datasets/VLM-Reasoner/VerMulti))数据集平衡感知和推理能力
+
+我们开源了最终模型 [MGT-PerceReason](https://huggingface.co/VLM-Reasoner/LMM-R1-MGT-PerceReason)
 
 #### 直接强化学习训练(用于比较)
 

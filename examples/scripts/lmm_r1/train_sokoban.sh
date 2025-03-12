@@ -7,7 +7,7 @@
 # {"message": "[{\"role\": \"system\", \"content\": \"You're going to play a game of Sokoban, where the goal is to manipulate the green character to push the yellow box into the target area (an area with a red dot in the center). \\nGenerate all actions from the initial frame to the end at once.\"}, {\"role\": \"user\", \"content\": [{\"type\": \"image\", \"image\": \"file://path/to/Sokoban-small-v1-frame_91.png\"}, {\"type\": \"text\", \"text\": \"You should first thinks about the reasoning process in the mind and then provides the user with the answer, the answer is a long sequence of Left, Right, Up, Down, separated by ','. The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, e.g., <think> To ... </think><answer> Left, Right, ... </answer>, which means your output should start with <think> and end with </answer>.\"}]}]", "question": "Sokoban-small-v1-level_91", "answer": "", "env_path": "path/to/Sokoban-small-v1-level_91.npy"}
 
 
-# use gen_tasks.py to generate images and configs (.npy files)
+# use examples/data/gen_sokoban_tasks.py to generate images and configs (.npy files)
 
 
 export ROOT_PATH=pwd
