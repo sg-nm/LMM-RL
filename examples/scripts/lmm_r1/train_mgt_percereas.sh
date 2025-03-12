@@ -112,7 +112,6 @@ ray job submit --address="http://127.0.0.1:8265" \
    --ckpt_path ${SAVE_PATH}/${MODEL_NAME}/ckpt \
    --save_hf_ckpt \
    --load_checkpoint \
-   --train_vlm \
    --prompt_data_probs ${PROMPT_DATA_PROBS} \
    --use_wandb ${WANDB_API_KEY} \
    --wandb_run_name ${MODEL_NAME} \
