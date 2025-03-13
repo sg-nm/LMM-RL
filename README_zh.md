@@ -132,8 +132,8 @@ bash examples/scripts/lmm_r1/train_mgt_percereas.sh
 ```
 
 每个MGT脚本都从FRE-Text检查点继续训练，专注于特定领域：
-- **MGT-Geo**：使用VerMulti-Geo数据集(15K几何问题)增强几何推理
-- **MGT-PerceReason**：使用完整的[VerMulti]((https://huggingface.co/datasets/VLM-Reasoner/VerMulti))数据集平衡感知和推理能力
+- **MGT-Geo**：使用[VerMulti-Geo]((https://huggingface.co/datasets/VLM-Reasoner/VerMulti))数据集(15K几何问题)增强几何推理
+- **MGT-PerceReason**：使用完整的[VerMulti](https://huggingface.co/datasets/VLM-Reasoner/VerMulti)数据集平衡感知和推理能力
 
 我们开源了最终模型 [MGT-PerceReason](https://huggingface.co/VLM-Reasoner/LMM-R1-MGT-PerceReason)
 

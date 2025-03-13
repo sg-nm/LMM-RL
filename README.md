@@ -132,7 +132,7 @@ bash examples/scripts/lmm_r1/train_mgt_percereas.sh
 ```
 
 Each MGT script continues training from the FRE-Text checkpoint, focusing on a specific domain:
-- **MGT-Geo**: Uses VerMulti-Geo dataset (15K geometry problems) to enhance geometric reasoning
+- **MGT-Geo**: Uses [VerMulti-Geo](https://huggingface.co/datasets/VLM-Reasoner/VerMulti) dataset (15K geometry problems) to enhance geometric reasoning
 - **MGT-PerceReason**: Uses the full [VerMulti](https://huggingface.co/datasets/VLM-Reasoner/VerMulti) dataset to balance perception and reasoning capabilities.
 
 We release our final model, [MGT-PerceReason](https://huggingface.co/VLM-Reasoner/LMM-R1-MGT-PerceReason).
