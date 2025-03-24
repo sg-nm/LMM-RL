@@ -7,7 +7,7 @@
 export WORKSPACE_DIR="$(pwd)"                      # Path to project root directory
 export DATASET_PATH="./data/MathV360k/geo_split.jsonl"  # Path to your dataset
 export PRETRAIN_MODEL_PATH="./models/Qwen2.5-VL-3B-Instruct"  # Path to pretrained model
-export SAVE_PATH="./checkpoints"                   # Path to save checkpoints
+export SAVE_PATH="/checkpoints"                   # Absolute path to save checkpoints
 
 # Model configuration
 export MODEL_NAME="lmm-r1-direct-rl-geo"              # Name for this training run

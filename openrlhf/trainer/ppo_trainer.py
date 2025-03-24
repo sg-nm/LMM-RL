@@ -359,11 +359,7 @@ class PPOTrainer(ABC):
             # pad seq makes the sequence a multiple of ring_attention_size.
             if self.strategy.ring_attn_group is not None:
                 pad_len, sequences, attention_mask, num_actions, packed_seq_lens = pad_sequences(
-                    sequences, 
-                    attention_mask, 
-                    num_actions, 
-                    packed_seq_lens, 
-                    self.strategy.ring_attn_group
+                    sequences, attention_mask, num_actions, packed_seq_lens, self.strategy.ring_attn_group
                 )
             if self.args.use_kl_loss and experience.base_action_log_probs is not None:
                 base_action_log_probs = torch.cat(experience.base_action_log_probs, dim=0).unsqueeze(0)
@@ -501,11 +497,7 @@ class PPOTrainer(ABC):
             # pad seq makes the sequence len a multiple of ring_attention_size.
             if self.strategy.ring_attn_group is not None:
                 pad_len, sequences, attention_mask, num_actions, packed_seq_lens = pad_sequences(
-                    sequences, 
-                    attention_mask, 
-                    num_actions, 
-                    packed_seq_lens, 
-                    self.strategy.ring_attn_group
+                    sequences, attention_mask, num_actions, packed_seq_lens, self.strategy.ring_attn_group
                 )
 
         else:
@@ -606,20 +598,4 @@ class PPOTrainer(ABC):
             self._save_checkpoint(args, tag, client_states)
 
     def _save_checkpoint(self, args, tag, client_states):
-        if not self.disable_ds_ckpt:
-            self.strategy.save_ckpt(
-                self.actor.model,
-                os.path.join(args.ckpt_path, "_actor"),
-                tag,
-                args.max_ckpt_num,
-                args.max_ckpt_mem,
-                client_states,
-            )
-            if self.critic is not None:
-                self.strategy.save_ckpt(
-                    self.critic, os.path.join(args.ckpt_path, "_critic"), tag, args.max_ckpt_num, args.max_ckpt_mem
-                )
-
-        if self.save_hf_ckpt:
-            save_path = os.path.join(args.ckpt_path, f"{tag}_hf")
-            self.strategy.save_model(self.actor, self.processor or self.tokenizer, save_path)
+        raise NotImplementedError("This method should be implemented by the subclass.")

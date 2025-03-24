@@ -7,7 +7,7 @@
 export WORKSPACE_DIR="$(pwd)"                      # Path to project root directory
 export DATASET_PATH="./data/VerMulti/mathv60k_message.jsonl"  # Path to your dataset
 export PRETRAIN_MODEL_PATH="./checkpoints/lmm-r1-fre-text/"  # Path to pretrained model
-export SAVE_PATH="./checkpoints"                   # Path to save checkpoints
+export SAVE_PATH="/checkpoints"                   # Absolute path to save checkpoints
 
 # Model configuration
 export MODEL_NAME="lmm-r1-mgt-percereason"        # Name for this training run

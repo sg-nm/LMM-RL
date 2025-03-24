@@ -19,7 +19,7 @@ torch==2.5.1
 torchvision
 torchmetrics
 tqdm
-transformers @ git+https://github.com/huggingface/transformers@main
+transformers==4.49.0
 transformers_stream_generator
 wandb
 wheel

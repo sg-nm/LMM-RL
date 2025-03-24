@@ -169,6 +169,12 @@ if __name__ == "__main__":
     elif args.prompt_template=="base":
         problem_pattern = r"User: (.*?)\n\nAssistant:"
         response_prefix = r"Assistant: "
+    elif args.prompt_template=="phi3":
+        problem_pattern = r"<|user|>\n(.*?)<|end|>\n<|assistant|>\n"
+        response_prefix = r"<|assistant|>\n"
+    elif args.prompt_template=="phi4":
+        problem_pattern = r"<|user|>\n(.*?)<|end|>\n<|assistant|>\n"
+        response_prefix = r"<|assistant|>\n"
     else:
         raise ValueError(f"Unknown chat format: {args.dataset}")
     print("load dataset success")
