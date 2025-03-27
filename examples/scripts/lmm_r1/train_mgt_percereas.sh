@@ -95,12 +95,12 @@ ray job submit --address="http://127.0.0.1:8265" \
    --num_episodes 2 \
    --prompt_max_len 4096 \
    --max_samples 100000 \
-   --generate_max_len 8000 \
+   --generate_max_len 8192 \
    --advantage_estimator reinforce_baseline \
    --zero_stage 3 \
    --bf16 \
    --actor_learning_rate 4e-7 \
-   --init_kl_coef 0.0 \
+   --init_kl_coef 0.001 \
    --prompt_data ${DATASET_PATH} \
    --input_key message \
    --normalize_reward \
