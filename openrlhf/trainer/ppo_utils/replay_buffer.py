@@ -51,6 +51,7 @@ def split_experience_batch(experience: Experience, data_processor: Optional[Base
         "advantages",
         "attention_mask",
         "action_mask",
+        "visual_inputs",
     )
     for key in keys:
         value = getattr(experience, key)
@@ -65,12 +66,13 @@ def split_experience_batch(experience: Experience, data_processor: Optional[Base
         for i, v in enumerate(vals):
             batch_kwargs[i][key] = v
     
-    visual_inputs_batch = experience.visual_inputs
-    visual_inputs_batch['input_ids'] = experience.sequences
-    visual_inputs_chunks = data_processor.split_input_batch(visual_inputs_batch)
-    for i, visual_inputs in enumerate(visual_inputs_chunks):
-        visual_inputs.pop('input_ids')
-        batch_kwargs[i]["visual_inputs"] = visual_inputs
+    if data_processor is not None:
+        visual_inputs_batch = experience.visual_inputs
+        visual_inputs_batch['input_ids'] = experience.sequences
+        visual_inputs_chunks = data_processor.split_input_batch(visual_inputs_batch)
+        for i, visual_inputs in enumerate(visual_inputs_chunks):
+            visual_inputs.pop('input_ids')
+            batch_kwargs[i]["visual_inputs"] = visual_inputs
 
 
     for i in range(batch_size):
@@ -99,7 +101,7 @@ def zero_pad_sequences(sequences: List[torch.Tensor], side: str = "left") -> tor
     return torch.stack(padded_sequences, dim=0)
 
 
-def make_experience_batch(items: List[BufferItem], data_processor: Optional[BaseDataProcessor], packing_samples=False) -> Experience:
+def make_experience_batch(items: List[BufferItem], data_processor: Optional[BaseDataProcessor], packing_samples=False, multimodal=False) -> Experience:
     kwargs = {}
     keys = (
         "sequences",
@@ -124,9 +126,9 @@ def make_experience_batch(items: List[BufferItem], data_processor: Optional[Base
         vals = torch.tensor([item.info[key] for item in items])
         kwargs["info"][key] = vals
     
-    kwargs["visual_inputs"] = data_processor.make_input_batch([item.visual_inputs for item in items])
+    if multimodal:
+        kwargs["visual_inputs"] = data_processor.make_input_batch([item.visual_inputs for item in items])
     return Experience(**kwargs)
-
 
 def remove_padding_in_sequences(items):
     for item in items:
@@ -185,6 +187,7 @@ class NaiveReplayBuffer(ABC):
         packing_samples: bool = False,
         drop_maxlen: bool = False,
         maxlen: int = 10**8,
+        multimodal: bool = False,
     ) -> None:
         super().__init__()
         self.sample_batch_size = sample_batch_size
@@ -197,6 +200,7 @@ class NaiveReplayBuffer(ABC):
         self.items: List[BufferItem] = []
         self.maxlen = maxlen
         self.drop_maxlen = drop_maxlen
+        self.multimodal = multimodal
 
     @torch.no_grad()
     def append(self, experience: Experience) -> None:
@@ -224,7 +228,7 @@ class NaiveReplayBuffer(ABC):
     @torch.no_grad()
     def sample(self) -> Experience:
         items = random.sample(self.items, self.sample_batch_size)
-        experience = make_experience_batch(items, self.data_processor, self.packing_samples)
+        experience = make_experience_batch(items, self.data_processor, self.packing_samples, self.multimodal)
         if self.cpu_offload:
             experience.to_device(self.target_device)
         return experience
@@ -236,7 +240,7 @@ class NaiveReplayBuffer(ABC):
         return self.items[idx]
 
     def collate_fn(self, batch) -> Experience:
-        experience = make_experience_batch(batch, self.data_processor, self.packing_samples)
+        experience = make_experience_batch(batch, self.data_processor, self.packing_samples, self.multimodal)
         return experience
 
     def normalize(self, attribute: str, strategy) -> None:

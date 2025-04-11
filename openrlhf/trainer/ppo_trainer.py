@@ -84,6 +84,7 @@ class PPOTrainer(ABC):
         max_epochs: int = 1,
         max_norm: float = 1.0,
         data_processor: Optional[Callable[[Any], Dict]] = None,
+        tokenizer: Optional[Callable[[Any], dict]] = None,
         prompt_max_len: int = 128,
         dataloader_pin_memory: bool = True,
         remote_rm_url: str = None,
@@ -104,8 +105,7 @@ class PPOTrainer(ABC):
         self.micro_rollout_batch_size = micro_rollout_batch_size
         self.max_epochs = max_epochs
         self.data_processor = data_processor
-        self.tokenizer = data_processor.tokenizer
-        self.processor = data_processor.processor
+        self.tokenizer = tokenizer
 
 
         self.generate_kwargs = generate_kwargs
@@ -171,8 +171,8 @@ class PPOTrainer(ABC):
             import wandb
 
             self._wandb = wandb
-            if not wandb.api.api_key:
-                wandb.login(key=strategy.args.use_wandb)
+            # if not wandb.api.api_key:
+            #     wandb.login(key=strategy.args.use_wandb)
             wandb.init(
                 entity=strategy.args.wandb_org,
                 project=strategy.args.wandb_project,
@@ -199,7 +199,8 @@ class PPOTrainer(ABC):
         self,
         args,
         prompts_dataloader,
-        pretrain_dataloader,
+        prompts_dataloader_eval=None,
+        pretrain_dataloader=None,
         consumed_samples=0,
         num_update_steps_per_episodes=1,
     ) -> None:
@@ -219,6 +220,7 @@ class PPOTrainer(ABC):
 
         self.prompts_dataloader = prompts_dataloader
         self.pretrain_dataloader = pretrain_dataloader
+        self.prompts_dataloader_eval = prompts_dataloader_eval
 
         # Restore step and start_epoch
         steps = consumed_samples // args.rollout_batch_size + 1
@@ -227,23 +229,13 @@ class PPOTrainer(ABC):
 
         for episode in range(start_episode, args.num_episodes):
             if isinstance(self.prompts_dataloader.sampler, DistributedSampler):
-                self.prompts_dataloader.sampler.set_epoch(
-                    episode, consumed_samples=0 if episode > start_episode else consumed_samples
-                )
-            pbar = tqdm(
-                range(self.prompts_dataloader.__len__()),
-                desc=f"Episode [{episode + 1}/{args.num_episodes}]",
-                disable=not self.strategy.is_rank_0(),
-            )
+                self.prompts_dataloader.sampler.set_epoch(episode, consumed_samples=0 if episode > start_episode else consumed_samples)
+            pbar = tqdm(range(self.prompts_dataloader.__len__()), desc=f"Episode [{episode + 1}/{args.num_episodes}]", disable=not self.strategy.is_rank_0(),)
 
             for rand_prompts, labels in self.prompts_dataloader:
-                for i, experience in enumerate(
-                    self.experience_maker.make_experience_list(rand_prompts, labels, **self.generate_kwargs)
-                ):
+                for i, experience in enumerate(self.experience_maker.make_experience_list(rand_prompts, labels, **self.generate_kwargs)):
                     if i == 0:
-                        output = self.tokenizer.batch_decode(
-                            experience.sequences[0].unsqueeze(0), skip_special_tokens=True
-                        )
+                        output = self.tokenizer.batch_decode(experience.sequences[0].unsqueeze(0), skip_special_tokens=True)
                         self.strategy.print(output)
                     self.replay_buffer.append(experience)
 
@@ -286,7 +278,7 @@ class PPOTrainer(ABC):
         for epoch in range(self.max_epochs):
             pbar = tqdm(
                 dataloader,
-                desc=f"Train epoch [{epoch + 1}/{self.max_epochs}]",
+                desc=f"PPO Train epoch [{epoch + 1}/{self.max_epochs}]",
                 disable=not self.strategy.is_rank_0(),
             )
             for experience in pbar:
@@ -343,6 +335,7 @@ class PPOTrainer(ABC):
         return status
 
     def training_step_actor(self, experience: Experience) -> Dict[str, float]:
+        
         self.actor.train()
 
         # TODO: this is a bad indicator to say that data is packed...
@@ -375,16 +368,27 @@ class PPOTrainer(ABC):
                 base_action_log_probs = experience.base_action_log_probs
 
         # actor loss
-        action_log_probs, output = self.actor(
-            sequences,
-            num_actions,
-            attention_mask=attention_mask,
-            return_output=True,
-            ring_attn_group=self.strategy.ring_attn_group,
-            logps_allgather=True,
-            packed_seq_lens=packed_seq_lens,
-            visual_inputs=visual_inputs
-        )
+        if self.args.multimodal:
+            action_log_probs, output = self.actor(
+                sequences,
+                num_actions,
+                attention_mask=attention_mask,
+                return_output=True,
+                ring_attn_group=self.strategy.ring_attn_group,
+                logps_allgather=True,
+                packed_seq_lens=packed_seq_lens,
+                visual_inputs=visual_inputs
+            )
+        else:
+            action_log_probs, output = self.actor(
+                sequences,
+                num_actions,
+                attention_mask=attention_mask,
+                return_output=True,
+                ring_attn_group=self.strategy.ring_attn_group,
+                logps_allgather=True,
+                packed_seq_lens=packed_seq_lens,
+            )
         # unpad sequence ensures that pad tokens do not contribute to the loss calculation.
         if self.strategy.ring_attn_group is not None:
             assert pad_len is not None
@@ -473,11 +477,12 @@ class PPOTrainer(ABC):
             status["ptx_loss"] = ptx_loss.item()
         for k, v in experience.info.items():
             if k == "kl":
-                status[k] = (
-                    (v * experience.info["response_length"]).sum() / experience.info["response_length"].sum()
-                ).item()
+                status[k] = ((v * experience.info["response_length"]).sum() / experience.info["response_length"].sum()).item()
             else:
                 status[k] = v.mean().item()
+        
+        # if self.strategy.is_rank_0():
+        #     print(f"Training actor done: {status}")
         return status
 
     def training_step_critic(self, experience: Experience) -> Dict[str, float]:

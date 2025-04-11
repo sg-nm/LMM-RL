@@ -1,7 +1,9 @@
 import logging
+import time
 import os
 import socket
-from typing import Callable, Dict, List, Optional, Type
+from typing import Callable, Dict, List, Optional, Type, Any
+from tqdm import tqdm
 
 import ray
 import torch
@@ -9,7 +11,7 @@ import torch.distributed as dist
 from ray.util.placement_group import PlacementGroup, placement_group
 from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 
-from openrlhf.models import Actor, get_llm_for_sequence_regression
+from openrlhf.models import Actor, MultiModalActor, get_llm_for_sequence_regression
 from openrlhf.trainer.ray.utils import ray_noset_visible_devices
 from openrlhf.utils.deepspeed import DeepspeedStrategy
 
@@ -59,22 +61,68 @@ class BasePPORole(DistributedTorchRayActor):
 
     def init_model_from_pretrained(self, *args, **kwargs):
         raise NotImplementedError()
+    
+    def forward_batch(
+        self,
+        **kwargs,
+    ) -> List[Any]:
+        """Process input data by calling forward function for each item in the lists.
+
+        Args:
+            **kwargs: Input parameters in list format. Each parameter should be a list with same length.
+                     The first parameter's length determines the number of forward calls.
+
+        Returns:
+            List[Any]: List of results from forward function
+        """
+        # Get the first parameter to determine list length
+        first_param = next(iter(kwargs.values()))
+        list_length = len(first_param)
+
+        # Verify all parameters have same length
+        for param_name, param_value in kwargs.items():
+            if len(param_value) != list_length:
+                raise ValueError(f"Parameter {param_name} has length {len(param_value)}, expected {list_length}")
+
+        results = []
+        # for i in tqdm(range(list_length), desc="Inference", disable=not self.strategy.is_rank_0()):
+        for i in range(list_length):
+            sample_kwargs = {param_name: param_value[i] for param_name, param_value in kwargs.items()}
+
+            result = self.forward(**sample_kwargs)
+            results.append(result)
+
+        return results
 
 
 @ray.remote(num_gpus=1)
 class ReferenceModelRayActor(BasePPORole):
     def init_model_from_pretrained(self, strategy: DeepspeedStrategy, pretrain):
         self._setup_distributed(strategy)
-        model = Actor(
-            pretrain,
-            use_flash_attention_2=strategy.args.flash_attn,
-            bf16=strategy.args.bf16,
-            load_in_4bit=strategy.args.load_in_4bit,
-            ds_config=strategy.get_ds_eval_config(offload=strategy.args.ref_reward_offload),
-            packing_samples=strategy.args.packing_samples,
-            temperature=strategy.args.temperature,
-            use_liger_kernel=strategy.args.use_liger_kernel,
-        )
+        self.multimodal = strategy.args.multimodal
+        if self.multimodal:
+            model = MultiModalActor(
+                pretrain,
+                use_flash_attention_2=strategy.args.flash_attn,
+                bf16=strategy.args.bf16,
+                load_in_4bit=strategy.args.load_in_4bit,
+                ds_config=strategy.get_ds_eval_config(offload=strategy.args.ref_reward_offload),
+                packing_samples=strategy.args.packing_samples,
+                temperature=strategy.args.temperature,
+                use_liger_kernel=strategy.args.use_liger_kernel,
+            )
+        else:
+            model = Actor(
+                pretrain,
+                use_flash_attention_2=strategy.args.flash_attn,
+                bf16=strategy.args.bf16,
+                load_in_4bit=strategy.args.load_in_4bit,
+                ds_config=strategy.get_ds_eval_config(offload=strategy.args.ref_reward_offload),
+                packing_samples=strategy.args.packing_samples,
+                temperature=strategy.args.temperature,
+                use_liger_kernel=strategy.args.use_liger_kernel,
+            )
+
         strategy.print(model)
 
         if strategy.args.ref_reward_offload:
@@ -93,12 +141,22 @@ class ReferenceModelRayActor(BasePPORole):
         packed_seq_lens: Optional[list[int]] = None,
         visual_inputs: Optional[dict] = None,
     ) -> torch.Tensor:
-        if visual_inputs is None:
-            visual_inputs = {}
         device = torch.cuda.current_device()
         with torch.no_grad():
-            visual_inputs = {k:v.to(device) for k,v in visual_inputs.items()}
-            log_probs = self.model(
+            if self.multimodal:
+                visual_inputs = {k:v.to(device) for k,v in visual_inputs.items()}
+                log_probs = self.model(
+                    sequences.to(device),
+                    num_actions,
+                    attention_mask.to(device),
+                    return_output=return_output,
+                    ring_attn_group=self.strategy.ring_attn_group,
+                    logps_allgather=logps_allgather,
+                    packed_seq_lens=packed_seq_lens,
+                    visual_inputs=visual_inputs,
+                )
+            else:
+                log_probs = self.model(
                 sequences.to(device),
                 num_actions,
                 attention_mask.to(device),
@@ -106,8 +164,8 @@ class ReferenceModelRayActor(BasePPORole):
                 ring_attn_group=self.strategy.ring_attn_group,
                 logps_allgather=logps_allgather,
                 packed_seq_lens=packed_seq_lens,
-                visual_inputs=visual_inputs,
             )
+
         return log_probs.to("cpu")
 
     def empty_cache(self) -> None:
@@ -325,6 +383,66 @@ class PPORayActorGroup:
             )
 
         return refs
+    
+    def async_fit_actor_model_feedback(
+        self,
+        critic_model_group: "PPORayActorGroup",
+        initial_model_group: "PPORayActorGroup",
+        reward_model_groups: List["PPORayActorGroup"],
+        remote_rm_urls: List[str] = None,
+        reward_fn: Callable[[List[torch.Tensor]], torch.Tensor] = None,
+        vllm_engines: List = None,
+        feedback_model = None,
+    ):
+        """Train actor model.
+
+        Args:
+            critic_model_group (PPORayActorGroup): critic model group.
+            initial_model_group (PPORayActorGroup): reference model group.
+            reward_model_groups (PPORayActorGroup): reward model groups.
+            remote_rm_urls: remote RM APIs.
+            reward_fn: reward calculate function, must be specified if using multiple reward models.
+            vllm_engines: vllm engines for text generation, if not specified, generate text by actor model directly.
+
+        Returns:
+            List: list of remote object refs.
+        """
+        assert (
+            (remote_rm_urls and len(remote_rm_urls) == 1)
+            or (reward_model_groups and len(reward_model_groups) == 1)
+            or reward_fn is not None
+        ), "reward_fn must be specified if using multiple reward models"
+
+        critic_actors = critic_model_group._actor_handlers if critic_model_group else None
+        initial_actors = initial_model_group._actor_handlers if initial_model_group else None
+
+        refs = []
+        # TODO(wuxibin): actor model choose critic/reward/initial model in a
+        # round robin fashion, implement more efficient dispatching strategy.
+        for i, actor in enumerate(self._actor_handlers):
+            critic_actor = critic_actors[i % len(critic_actors)] if critic_actors else None
+            initial_actor = initial_actors[i % len(initial_actors)] if initial_actors else None
+
+            reward_actors = []
+            if not remote_rm_urls and reward_model_groups is not None:
+                for reward_model_group in reward_model_groups:
+                    actors = reward_model_group._actor_handlers
+                    reward_actors.append(actors[i % len(actors)])
+
+            refs.append(
+                actor.fit.remote(
+                    critic_model=critic_actor,
+                    initial_model=initial_actor,
+                    reward_model=reward_actors,
+                    remote_rm_url=remote_rm_urls,
+                    reward_fn=reward_fn,
+                    vllm_engines=vllm_engines,
+                    feedback_model=feedback_model,
+                    critic_train_remote=(i < len(critic_actors)) if critic_actor else None,
+                )
+            )
+
+        return refs
 
     def async_save_model(self):
         """Save actor model on rank 0.
@@ -340,3 +458,6 @@ class PPORayActorGroup:
             method = getattr(actor, method_name)
             refs.append(method.remote(*args, **kwargs))
         return refs
+
+
+   
