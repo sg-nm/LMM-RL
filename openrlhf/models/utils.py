@@ -87,6 +87,44 @@ def compute_reward(
 
     return reward
 
+def compute_uniform_reward(
+    reward: Union[torch.Tensor, float],
+    kl_coef: float,
+    kl: Union[torch.Tensor, list[torch.Tensor]],
+    action_mask: Optional[torch.Tensor] = None,
+    num_actions: Optional[Union[int, list[int]]] = None,
+    reward_clip_range: Tuple[float, float] = None,
+) -> Union[torch.Tensor, list[torch.Tensor]]:
+    """
+    Apply r + (-β * KL[t]) at each valid token position.
+
+    If r is scalar → broadcast to all valid tokens.
+    If r is [B] → broadcast along T dimension.
+    """
+    if kl_coef <= 0.0:
+        kl_coef = 0.0
+
+    if reward_clip_range:
+        reward = reward.clamp(min=reward_clip_range[0], max=reward_clip_range[1])
+
+    if action_mask is not None:
+        kl_reward = -kl_coef * kl
+        eos_indices = action_mask.size(1) - 1 - action_mask.long().fliplr().argmax(dim=1, keepdim=True)
+        last_reward = torch.zeros_like(kl).scatter_(dim=1, index=eos_indices, src=reward.unsqueeze(1).to(kl.dtype))
+
+        reward = last_reward + kl_reward
+    
+    else:
+        # TODO: write a more efficient version
+        rewards = []
+        for i, (kl_seg, action_len) in enumerate(zip(kl, num_actions)):
+            kl_reward = -kl_coef * kl_seg
+            kl_reward[action_len-1] += reward[i]
+            kl_reward[:action_len-1] += reward[i]
+            rewards.append(kl_reward)
+
+    return rewards
+
 
 def _logsumexp_by_chunk(logits: torch.Tensor, chunk_size: int = 1024) -> torch.Tensor:
     seq_len = logits.shape[0]

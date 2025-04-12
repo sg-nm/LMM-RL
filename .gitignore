@@ -152,3 +152,6 @@ core
 ckpts
 data
 !examples/data
+
+wandb/*
+checkpoints/*

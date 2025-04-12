@@ -461,7 +461,7 @@ class ActorPPOTrainer_TG(PPOTrainer):
         torch.distributed.barrier()
         status = {}
 
-        if global_steps == 0 or global_steps == 1 and self.strategy.is_rank_0():
+        if global_steps == 0 or global_steps == 1:
             eval_accuracy = self.evaluate()
             print(f"Init eval accuracy: {eval_accuracy}")
             status["eval_accuracy"] = eval_accuracy
@@ -471,7 +471,6 @@ class ActorPPOTrainer_TG(PPOTrainer):
                     for k, v in {**status, "global_step": global_steps}.items()
                 }
                 self._wandb.log(logs)
-        torch.distributed.barrier()
 
         # 2. triger remote critic model training
         if self.critic_train_remote:
@@ -521,7 +520,7 @@ class ActorPPOTrainer_TG(PPOTrainer):
         torch.distributed.barrier()
 
         # 6. evaluate
-        if self.strategy.args.eval and self.strategy.is_rank_0():
+        if self.strategy.args.eval:
             eval_accuracy = self.evaluate()
             status["eval_accuracy"] = eval_accuracy
 
@@ -692,6 +691,7 @@ class ActorPPOTrainer_TG(PPOTrainer):
         offload_deepspeed_states(self.actor.model)
 
     def evaluate(self):
+        print("Evaluating...")
         self.actor.eval()
         from vllm import SamplingParams
         self.response_length_list = []
@@ -704,7 +704,7 @@ class ActorPPOTrainer_TG(PPOTrainer):
             llms = self.vllm_engines[rank::world_size]
 
         sampling_params = SamplingParams(
-            temperature=1.0,
+            temperature=0,
             top_p=1.0,
             top_k=-1,
             max_tokens=1024,
@@ -1290,7 +1290,7 @@ class ActorModelRayActor_TG(BasePPORole):
             llms = vllm_engines[rank::world_size]
 
         sampling_params = SamplingParams(
-            temperature=1.0,
+            temperature=0.6,
             top_p=1.0,
             top_k=-1,
             max_tokens=1024,

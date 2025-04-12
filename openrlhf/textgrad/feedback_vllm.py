@@ -6,15 +6,14 @@ import ray
 
 
 ## Prompt for base model without feedbacks
-PROMPT_BASE = """Answer the following question. Provide your thought behind the answer, too.
+PROMPT_BASE = """Answer a given question using the following output format.
+
+## Output Format
+Thought: provide your thoughts behind the answer
+Answer: only provide the choice label from the given choices, e.g. Answer: C
 
 ## Question
 {question}
-
-Generate your response using the following format:
-
-Thought:
-Answer:
 """
 
 ## Prompt for feedback models

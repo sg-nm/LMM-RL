@@ -23,7 +23,7 @@ from io import BytesIO
 
 from openrlhf.models.actor import Actor
 from openrlhf.models.ring_attn_utils import pad_sequences, unpad_sequences
-from openrlhf.models.utils import compute_approx_kl, compute_reward, masked_mean, unpacking_samples
+from openrlhf.models.utils import compute_approx_kl, compute_reward, masked_mean, unpacking_samples, compute_uniform_reward
 from openrlhf.models.ring_attn_utils import pad_sequences, unpad_sequences
 from openrlhf.utils.logging_utils import init_logger
 from openrlhf.utils.remote_rm_utils import remote_rm_fn_ray
@@ -33,7 +33,7 @@ from qwen_vl_utils import process_vision_info
 from gui_env.robust_parallel_desktop_env import ParallelDesktopEnv
 from agents.ui_tars import build_singleturn_prompt, parse_action_qwen2vl, parsing_response_to_pyautogui_code
 from openrlhf.trainer.ppo_utils.rewards import gui_agent_format_reward, english_format_reward
-from openrlhf.textgrad.feedback_vllm import FEEDBACK_PROMPT, FEEDBACK_PROMPT_BASE
+from openrlhf.textgrad.feedback_vllm import FEEDBACK_PROMPT, FEEDBACK_PROMPT_BASE, PROMPT_BASE
 from openrlhf.textgrad.custom_reward_functions import check_answer_commonsense_qa
 
 logger = init_logger(__name__)
@@ -559,6 +559,42 @@ class NaiveExperienceMaker(ABC):
 
         return returns
 
+    @torch.no_grad()
+    def get_uniform_returns(
+        self,
+        rewards: torch.Tensor,
+        action_mask: torch.Tensor,
+        gamma: float = 1.0,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Outcome-based returns (uniform reward) for all tokens such as GRPO.
+
+        Input:
+        - rewards: Tensor of shape (batch_size, response_size)
+        - action_mask: Tensor of shape (batch_size, response_size), binary mask
+
+        Output:
+        - returns: Tensor of shape (batch_size, response_size)
+        """
+
+        if isinstance(rewards, list):
+            # packing samples
+            # TODO: this is slow...
+            returns = []
+            for r in rewards:
+                ret = self.get_uniform_returns(r.unsqueeze(0), action_mask)
+                returns.append(ret.squeeze(0))
+            return returns
+
+        response_length = rewards.size(1)
+        returns = torch.zeros_like(rewards)
+
+        # Mask invalid responses if action_mask is provided
+        if action_mask is not None:
+            rewards = action_mask * rewards
+
+        return returns
+
 
 class RemoteExperienceMaker(NaiveExperienceMaker):
     def __init__(self, *args, vllm_engines: List = None, packing_samples=False, **kwargs):
@@ -1023,7 +1059,6 @@ class RemoteExperienceMaker_TG(NaiveExperienceMaker):
                 "wait_time": 0,
             }
         
-        ## == NaiveExperienceMaker.make_experience_list() == ##
         args = self.strategy.args
         # vLLM wakeup when vllm_enable_sleep
         if self.strategy.args.vllm_enable_sleep:
@@ -1069,14 +1104,25 @@ class RemoteExperienceMaker_TG(NaiveExperienceMaker):
                 experience = experience.to_device("cuda")
                 reward = reward.to(device="cuda")
                 num_actions = experience.info["num_actions"]
-                reward = compute_reward(
-                    reward,
-                    self.kl_ctl.value,
-                    experience.kl,
-                    action_mask=experience.action_mask,
-                    num_actions=num_actions,
-                    reward_clip_range=args.reward_clip_range,
-                )
+                if self.advantage_estimator == "uniform":
+                    reward = compute_uniform_reward(
+                        reward,
+                        self.kl_ctl.value,
+                        experience.kl,
+                        action_mask=experience.action_mask,
+                        num_actions=num_actions,
+                        reward_clip_range=args.reward_clip_range,
+                    )
+                else:
+                    reward = compute_reward(
+                        reward,
+                        self.kl_ctl.value,
+                        experience.kl,
+                        action_mask=experience.action_mask,
+                        num_actions=num_actions,
+                        reward_clip_range=args.reward_clip_range,
+                    )
+
 
                 if self.advantage_estimator == "gae":
                     experience.advantages, experience.returns = self.get_advantages_and_returns(
@@ -1093,6 +1139,9 @@ class RemoteExperienceMaker_TG(NaiveExperienceMaker):
                         generate_kwargs["gamma"],
                     )
                     experience.advantages = deepcopy(experience.returns)
+                elif self.advantage_estimator == "uniform":
+                    experience.returns = reward
+                    experience.advantages = deepcopy(experience.returns)
                 else:
                     raise Exception(f"Unkown advantage_estimator {self.advantage_estimator}")
 
@@ -1108,9 +1157,7 @@ class RemoteExperienceMaker_TG(NaiveExperienceMaker):
                 experience.kl = None
                 del experience.info["num_actions"]
                 experience.to_device("cpu")
-
                 all_experiences.append(experience)
-        ## == NaiveExperienceMaker.make_experience_list() == ##
         
         if self.critic is not None:
             for experience in all_experiences:
@@ -1192,6 +1239,12 @@ class RemoteExperienceMaker_TG(NaiveExperienceMaker):
             for prompt, model_response, feedbacks in zip(question_prompts, model_responses, all_feedbacks)
             for feedback in feedbacks # len(feedbacks) == args.n_feedback_samples_per_prompt
         ]
+        # create base prompts for RL later
+        base_prompts = [
+            PROMPT_BASE.format(question=prompt)
+            for prompt, model_response, feedbacks in zip(question_prompts, model_responses, all_feedbacks)
+            for feedback in feedbacks # len(feedbacks) == args.n_feedback_samples_per_prompt
+        ]
 
         if self.strategy.args.vllm_enable_sleep:
             from openrlhf.trainer.ray.vllm_engine import batch_vllm_engine_call
@@ -1200,7 +1253,7 @@ class RemoteExperienceMaker_TG(NaiveExperienceMaker):
             torch.cuda.synchronize()
         # get new responses from the model with feedbacks.
         # new_samples_list = [vllm_outputs1, vllm_outputs2, ...], each vllm_outputsX has self.strategy.args.n_feedback_samples_per_prompt samples.
-        new_samples_list = self._generate_vllm(output_text_feedback, all_labels, multimodal=self.multimodal, 
+        new_samples_list = self._generate_vllm_with_feedback(output_text_feedback, base_prompts, all_labels, multimodal=self.multimodal, 
                                                     n_samples_per_prompt=1, pack_size=self.strategy.args.n_feedback_samples_per_prompt)
         # vLLM offload when vllm_enable_sleep
         if self.strategy.args.vllm_enable_sleep:
@@ -1227,11 +1280,17 @@ class RemoteExperienceMaker_TG(NaiveExperienceMaker):
         for sample_id, new_r in enumerate(new_rewards):
             for i in range(len(new_r)):
                 if new_r[i] == 0 and base_rewards[sample_id] == 0:
-                    diff_rewards[sample_id, i] = -1.0
+                    diff_rewards[sample_id, i] = -0.5
                 elif new_r[i] == 1 and base_rewards[sample_id] == 1:
                     diff_rewards[sample_id, i] = 0.5
                 else:
                     diff_rewards[sample_id, i] = new_r[i] - base_rewards[sample_id]
+        
+        # # normalize each diff_rewards using mean and std within the sample_id
+        # for i in range(len(diff_rewards)):
+        #     mean = torch.mean(diff_rewards[i])
+        #     std = torch.std(diff_rewards[i]) + 1e-6
+        #     diff_rewards[i] = (diff_rewards[i] - mean) / std
         
         # make Experience objects from new_samples_list
         experiences = []
@@ -1383,212 +1442,6 @@ class RemoteExperienceMaker_TG(NaiveExperienceMaker):
         return experiences
 
 
-        # start = time.time()
-        # sequences_cpu, attention_mask_cpu = (
-        #     sequences.to("cpu"),
-        #     attention_mask.to("cpu"),
-        # )
-
-        # visual_inputs_cpu = None
-        # # init log probs for KL loss
-        # if self.initial_model is not None:
-        #     base_action_log_probs_ref = self.initial_model.forward.remote(
-        #         sequences_cpu, num_actions, attention_mask_cpu, logps_allgather=True, packed_seq_lens=packed_seq_lens, visual_inputs=visual_inputs_cpu
-        #     )
-
-        #     if args.colocate_actor_ref or args.colocate_all_models:
-        #         ray.get([base_action_log_probs_ref])
-        #         ray.get([self.initial_model.empty_cache.remote()])
-        # else:
-        #     base_action_log_probs_ref = ray.put(None)
-
-        # # rewards for baseline model without feedbacks
-        # r_refs = []
-        # # support remote RM API with ray
-        # if not self.remote_rm_url:
-        #     # for rm in self.reward_model:
-        #     #     r_refs.append(
-        #     #         rm.forward.remote(
-        #     #             sequences_cpu, attention_mask_cpu, packed_seq_lens=packed_seq_lens, pad_sequence=True, visual_inputs=visual_inputs_cpu
-        #     #         )
-        #     #     )
-        #     assert self.custom_reward_func is not None, "custom_reward_func must be provided when remote_rm_url is not provided"
-        #     r_refs = self.custom_reward_func(output_text, labels)
-        # else:
-        #     # remote RM
-        #     if self.strategy.ring_attn_group is None or self.strategy.ring_attn_rank == 0:
-        #         if not self.packing_samples:
-        #             queries = self.tokenizer.batch_decode(sequences_cpu, skip_special_tokens=False)
-        #         else:
-        #             sequences_list = []
-        #             offset = 0
-        #             tokens_list = sequences_cpu.tolist()[0]
-        #             for length in packed_seq_lens:
-        #                 sequences_list.append(tokens_list[offset : offset + length])
-        #                 offset += length
-        #             queries = self.tokenizer.batch_decode(sequences_list, skip_special_tokens=False)
-
-        #         if self.custom_reward_func:
-        #             r = self.custom_reward_func.remote(queries, vllm_outputs.prompts, vllm_outputs.labels)
-        #             r_refs.append(r)
-        #         else:
-        #             for rm in self.remote_rm_url:
-        #                 r = remote_rm_fn_ray.remote(
-        #                     rm, queries=queries, prompts=vllm_outputs.prompts, labels=vllm_outputs.labels
-        #                 )
-        #                 r_refs.append(r)
-        #     else:
-        #         r_refs.append(ray.put(None))
-
-        # if args.colocate_all_models and not self.remote_rm_url:
-        #     ray.get(r_refs)
-        #     ray.get([self.reward_model[0].empty_cache.remote()])
-
-        # # get all_feedbacks: [[feedback1 for prompt1, feedback2 for prompt1, ...], [feedback1 for prompt2, feedback2 for prompt2, ...], ...].  len(all_feedbacks) == len(prompts).
-        # all_feedbacks, all_labels = self.get_feedbacks(prompts, output_text, labels, multimodal=self.multimodal)
-        # # add the feedbacks to the original prompts
-        # output_text_feedback = [
-        #     FEEDBACK_PROMPT_BASE.format(question=prompt, model_answer=model_response, feedback=feedback)
-        #     for prompt, model_response, feedbacks in zip(prompts, output_text, all_feedbacks)
-        #     for feedback in feedbacks
-        # ]
-        # # get new responses from the model with feedbacks
-        # new_vllm_outputs_list = self._generate_vllm(output_text_feedback, all_labels, multimodal=self.multimodal, n_samples_per_prompt=1)
-        # # get new rewards from the new responses
-        # new_r_refs = self.custom_reward_func(new_vllm_outputs_list.output_text, new_vllm_outputs_list.labels)
-        # # calculate the difference of rewards from the original responses
-        # feedback_r_refs = [new_r - r for new_r, r in zip(new_r_refs, r_refs)]
-        # total_rewards = torch.tensor(feedback_r_refs, dim=0)
-
-        # # log probs to compute KL to refine reward values
-        # action_log_probs = self.actor(
-        #     sequences, 
-        #     num_actions, 
-        #     attention_mask, 
-        #     ring_attn_group=self.strategy.ring_attn_group,
-        #     logps_allgather=True,
-        #     packed_seq_lens=packed_seq_lens,
-        #     visual_inputs=visual_inputs
-        # )
-
-        # # wait initial/critic/reward model done
-        # ref_values = ray.get([base_action_log_probs_ref])
-        # base_action_log_probs = ref_values[0]
-        # if base_action_log_probs is not None:
-        #     base_action_log_probs = base_action_log_probs.to(device)
-
-        # if (self.initial_model is not None) and (not args.use_kl_loss):
-        #     kl = compute_approx_kl(
-        #         action_log_probs,
-        #         base_action_log_probs,
-        #         action_mask=action_mask,
-        #         kl_estimator=self.strategy.args.kl_estimator,
-        #     )
-        # else:
-        #     kl = torch.zeros_like(action_log_probs, dtype=action_log_probs.dtype, device=device)
-
-        # if not self.packing_samples:
-        #     kl_mean = masked_mean(kl, action_mask, dim=-1)
-        # else:
-        #     if self.strategy.ring_attn_group is not None:
-        #         assert vllm_outputs.pad_len is not None
-        #         sequences, attention_mask, num_actions, packed_seq_lens, _, _, kl = unpad_sequences(
-        #             pad_len=vllm_outputs.pad_len,
-        #             sequences=sequences,
-        #             attention_mask=attention_mask,
-        #             num_actions=num_actions,
-        #             packed_seq_lens=packed_seq_lens,
-        #             ring_attn_group=self.strategy.ring_attn_group,
-        #             action_log_probs=action_log_probs,
-        #             values=value,
-        #             kl=kl,
-        #         )
-        #     # convert tensor into list of tensors so that it's easier to manipulate
-        #     # within dataset.
-        #     sequences = unpacking_samples(sequences, packed_seq_lens)
-        #     attention_mask = None
-        #     action_log_probs = unpacking_samples(action_log_probs, num_actions)
-        #     if value is not None:
-        #         value = unpacking_samples(value, num_actions)
-        #     if base_action_log_probs is not None:
-        #         base_action_log_probs = unpacking_samples(base_action_log_probs, num_actions)
-
-        #     kl = unpacking_samples(kl, num_actions)
-        #     kl_mean = torch.tensor([each_kl.mean() for each_kl in kl], device=device)
-
-        # if not args.use_kl_loss:
-        #     base_action_log_probs = None
-
-        # info = {
-        #     "kl": kl_mean,
-        #     "reward": r,
-        #     "response_length": vllm_outputs.response_length,
-        #     "total_length": vllm_outputs.total_length,
-        #     "num_actions": num_actions,
-        # }
-
-        # if args.colocate_actor_ref or args.colocate_all_models:
-        #     torch.cuda.synchronize()
-        #     torch.cuda.empty_cache()
-        
-
-        # for i in range(0, len(new_vllm_outputs_list), self.strategy.args.micro_rollout_batch_size):
-        #     new_vllm_outputs = new_vllm_outputs_list[i : i + self.strategy.args.micro_rollout_batch_size]
-        #     sequences = new_vllm_outputs.sequences
-        #     attention_mask = new_vllm_outputs.attention_mask
-        #     action_mask = new_vllm_outputs.action_mask
-        #     num_actions = new_vllm_outputs.num_actions
-        #     visual_inputs = new_vllm_outputs.visual_inputs
-        #     packed_seq_lens = new_vllm_outputs.packed_seq_lens
-
-        #     # log probs
-        #     action_log_probs = self.actor(
-        #         sequences, 
-        #         num_actions, 
-        #         attention_mask, 
-        #         ring_attn_group=self.strategy.ring_attn_group,
-        #         logps_allgather=True,
-        #         packed_seq_lens=packed_seq_lens,
-        #         visual_inputs=visual_inputs
-        #     )
-        
-        
-
-        # # # broadcast rewards to all ring attention ranks when using remote RM
-        # # if self.remote_rm_url and self.strategy.ring_attn_group is not None:
-        # #     if self.strategy.ring_attn_rank == 0:
-        # #         dist.broadcast_object_list(rewards, src=dist.get_rank(), group=self.strategy.ring_attn_group)
-        # #     else:
-        # #         dist.broadcast_object_list(
-        # #             rewards, src=self.strategy.ring_attn_ranks[0], group=self.strategy.ring_attn_group
-        # #         )
-
-        # # r = self.reward_fn(total_rewards) if len(total_rewards) > 0 else total_rewards[0]
-
-        # # avoid CUDA OOM when colocate models
-        # if args.colocate_critic_reward and not self.remote_rm_url:
-        #     ray.get([self.reward_model[0].empty_cache.remote()])
-
-        # if self.strategy.args.perf:
-        #     self.perf_stats["actor_value_rm_time"] += actor_value_rm_time
-        #     self.perf_stats["wait_time"] += wait_time
-
-        # experience = Experience(
-        #     sequences,
-        #     action_log_probs,
-        #     base_action_log_probs,
-        #     None,
-        #     None,
-        #     None,
-        #     attention_mask,
-        #     action_mask,
-        #     info,
-        #     kl,
-        #     visual_inputs=visual_inputs
-        # )
-
-        # self.actor.train()  # reset model state
-        # return experience
 
     def _generate_vllm(self, all_prompts: List[str], all_labels, multimodal=False, n_samples_per_prompt=1, pack_size=32, **kwargs) -> List[vLLM_outputs]:
         from vllm import SamplingParams
@@ -1781,7 +1634,219 @@ class RemoteExperienceMaker_TG(NaiveExperienceMaker):
                         visual_inputs=None,
                         labels=labels,
                         pad_len=pad_len,
+                        output_text=output_list,
+                    )
+                )
+        return vllm_outputs_list
+    
+    def _generate_vllm_with_feedback(
+            self, 
+            all_prompts: List[str],
+            base_prompts: List[str],
+            all_labels, multimodal=False, 
+            n_samples_per_prompt=1, 
+            pack_size=32, 
+            **kwargs) -> List[vLLM_outputs]:
+        """
+        Generate new samples with feedbacks from the base model.
+        For RL training, concat the original prompt ids and the new output ids.
+        """
+        
+        from vllm import SamplingParams
+        self.response_length_list = []
+        # round-robin load balance
+        rank = torch.distributed.get_rank() // self.strategy.ring_attn_size
+        world_size = torch.distributed.get_world_size() // self.strategy.ring_attn_size
+
+        # Select LLM engines: assign each rank an engine, or cycle through engines if world_size < engine_count
+        if len(self.vllm_engines) <= world_size:
+            llms = [self.vllm_engines[rank % len(self.vllm_engines)]]
+        else:
+            llms = self.vllm_engines[rank::world_size]
+
+        args = self.strategy.args
+
+        sampling_params = SamplingParams(
+            temperature=kwargs.get("temperature", 1.0),
+            top_p=kwargs.get("top_p", 1.0),
+            top_k=kwargs.get("top_k", -1),
+            max_tokens=kwargs.get("max_new_tokens", 1024),
+            min_tokens=kwargs.get("min_new_tokens", 1),
+            skip_special_tokens=kwargs.get("skip_special_tokens", False),
+            include_stop_str_in_output=True,
+        )
+
+        # convert the prompts to chat-style
+        all_prompts_chat = [self.apply_chat_template([{"role": "user", "content": prompt}], tokenize=False, add_generation_prompt=True) 
+                            for prompt in all_prompts]
+        
+        base_prompts_chat_ids = [self.apply_chat_template([{"role": "user", "content": prompt}], tokenize=True, add_generation_prompt=True) 
+                            for prompt in base_prompts]
+
+        # Expand prompt list based on the number of samples per prompt
+        all_prompts = sum([[prompt] * n_samples_per_prompt for prompt in all_prompts_chat], [])
+        base_prompts_chat_ids = sum([[prompt_ids] * n_samples_per_prompt for prompt_ids in base_prompts_chat_ids], [])
+        batch_size = (len(all_prompts) + len(llms) - 1) // len(llms)
+        all_labels = sum([[label] * n_samples_per_prompt for label in all_labels], [])
+
+
+        refs = []
+        if multimodal:
+            # For VLM
+            for i, llm in enumerate(llms):
+                messages = all_prompts[i * batch_size : (i + 1) * batch_size]
+                if messages:
+                    prompts = self.data_processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+                    images = [self.data_processor.get_images_from_messages(m) for m in messages]
+                    vllm_inputs = [{
+                            "prompt": p,
+                            "multi_modal_data":{"image": imgs} if imgs else None,
+                            "mm_processor_kwargs": kwargs["processor_kwargs"]
+                        } for p, imgs in zip(prompts,images)]
+                    refs.append(
+                        llm.add_requests.remote(rank, sampling_params=sampling_params, vllm_vision_input=vllm_inputs)
+                    )
+        else:
+            for i, llm in enumerate(llms):
+                messages = all_prompts[i * batch_size : (i + 1) * batch_size]
+                if messages:
+                    # prompts already are chat-style due to PromptDataset in ActorModelRayActor_TG class
+                    refs.append(llm.add_requests.remote(rank, sampling_params=sampling_params, vllm_vision_input=messages))
+
+        ray.get(refs)
+
+        # Make sure all requests are sent.
+        if self.strategy.ring_attn_group is None:
+            torch.distributed.barrier()
+        else:
+            time.sleep(3)
+
+        # Retrieve and combine results from all outputs
+        all_output_refs = []
+        for i, llm in enumerate(llms):
+            all_output_refs.append(llm.get_responses.remote(rank))
+        all_outputs = sum(ray.get(all_output_refs), [])
+
+
+        vllm_outputs_list = []
+        for i in range(0, len(all_outputs), pack_size):
+            outputs = all_outputs[i : i + pack_size]
+            prompts = all_prompts[i : i + pack_size]
+            labels = all_labels[i : i + pack_size]
+            base_prompt_ids = base_prompts_chat_ids[i : i + pack_size]
+
+            output_list = []
+            for output in outputs:
+                output_list.append(output.outputs[0].text)
+
+            if not self.packing_samples or self.multimodal:
+                # NOTE: concat all outputs to following format:
+                #
+                # | [PAD] [PAD] token token token | token token [EOS] [PAD] |
+                # | token token token token token | token token [EOS] [PAD] |
+                # | [PAD] [PAD] [PAD] token token | token token token [EOS] |
+                # |<---------- prompt ----------->|<-------- answer ------->|
+                max_input_len, max_output_len = 0, 0
+                for output in outputs:
+                    max_input_len = max(max_input_len, len(output.prompt_token_ids))
+                    max_output_len = max(max_output_len, len(output.outputs[0].token_ids))
+
+                pad_token_id, eos_token_id = self.tokenizer.pad_token_id, self.tokenizer.eos_token_id
+                sequences = []
+                for output in outputs:
+                    # left padding input
+                    input_len = len(output.prompt_token_ids)
+                    input_ids = [pad_token_id] * (max_input_len - input_len) + list(output.prompt_token_ids)
+
+                    # right padding output
+                    output_len = len(output.outputs[0].token_ids)
+                    output_ids = list(output.outputs[0].token_ids) + [pad_token_id] * (max_output_len - output_len)
+
+                    # concat input and output
+                    sequences.append(input_ids + output_ids)
+
+                sequences = torch.tensor(sequences)
+                sequences, attention_mask, action_mask = self.actor.process_sequences(
+                    sequences, max_input_len, eos_token_id, pad_token_id
+                )
+                sequences = sequences.to("cuda")
+                attention_mask = attention_mask.to("cuda")
+                action_mask = action_mask.to("cuda")
+                # Collect for visual input
+                
+                visual_inputs = self.data_processor(prompts, self.prompt_max_len, device="cuda")
+                visual_inputs.pop("input_ids")
+                visual_inputs.pop("attention_mask")
+                visual_inputs = {k: v.to("cuda") for k, v in visual_inputs.items()}
+                self.response_length_list.extend(attention_mask.float().sum(dim=-1).tolist())
+                vllm_outputs_list.append(
+                    vLLM_outputs(
+                        sequences=sequences,
+                        attention_mask=attention_mask,
+                        action_mask=action_mask,
+                        num_actions=action_mask.size(1),
+                        packed_seq_lens=None,
+                        response_length=action_mask.float().sum(dim=-1),
+                        total_length=attention_mask.float().sum(dim=-1),
+                        prompts=prompts,
+                        visual_inputs=visual_inputs,
+                        labels=labels,
+                        pad_len=None,
                         output_text=output_list
+                    )
+                )
+            else:
+                # NOTE: concat all outputs to following format:
+                #
+                # | token token token | token token [EOS] | token token token token token | token token [EOS] | token token | token token token [EOS] |
+                # |<---  prompt ----->|<---- answer ----->|<---------- prompt ----------->|<----- answer ---->|<- prompt -->|<-------- answer ------->|
+                # This will lead to better inference performance in terms of effificency.
+                pad_token_id, eos_token_id = self.tokenizer.pad_token_id, self.tokenizer.eos_token_id
+                sequences = []
+                packed_seq_lens = []
+                attention_mask = []
+                num_actions = []
+                for j, output in enumerate(outputs):
+                    input_len = len(base_prompt_ids[j])
+                    output_len = len(output.outputs[0].token_ids)
+                    packed_seq_lens.append(input_len + output_len)
+                    sequences.extend(base_prompt_ids[j] + list(output.outputs[0].token_ids))
+                    # sequences.extend(output.prompt_token_ids + list(output.outputs[0].token_ids))  # org imple. for standard RL
+                    attention_mask.extend([j + 1] * (input_len + output_len))
+                    num_actions.append(max(1, output_len))
+
+                # pad seq makes the sequence a multiple of ring_attention_size.
+                pad_len = None
+                if self.strategy.ring_attn_group is not None:
+                    pad_len, sequences, attention_mask, num_actions, packed_seq_lens = pad_sequences(
+                        sequences=sequences,
+                        attention_mask=attention_mask,
+                        num_actions=num_actions,
+                        packed_seq_lens=packed_seq_lens,
+                        ring_attn_group=self.strategy.ring_attn_group,
+                        pad_token_id=pad_token_id,
+                    )
+
+                sequences = torch.tensor(sequences, device="cuda").unsqueeze(0)
+                attention_mask = torch.tensor(attention_mask, device="cuda").unsqueeze(0)
+                action_mask = None
+                response_length = torch.tensor(num_actions, device="cuda", dtype=torch.float)
+                self.response_length_list.extend(num_actions)
+                total_length = torch.tensor(packed_seq_lens, device="cuda", dtype=torch.float)
+                vllm_outputs_list.append(
+                    vLLM_outputs(
+                        sequences=sequences,
+                        attention_mask=attention_mask,
+                        action_mask=None,
+                        num_actions=num_actions,
+                        packed_seq_lens=packed_seq_lens,
+                        response_length=response_length,
+                        total_length=total_length,
+                        prompts=prompts,
+                        visual_inputs=None,
+                        labels=labels,
+                        pad_len=pad_len,
+                        output_text=output_list,
                     )
                 )
         return vllm_outputs_list
