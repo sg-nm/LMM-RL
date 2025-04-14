@@ -16,10 +16,18 @@ Answer: only provide the choice label from the given choices, e.g. Answer: C
 {question}
 """
 
+## Prompt for base model without feedbacks
+PROMPT_BASE_MATH = """Please reason step by step, and put your final answer within \\boxed{{}}.
+
+## Question
+{question}
+"""
+
 ## Prompt for feedback models
 FEEDBACK_PROMPT = """Your task is to provide a helpful feedback for the following response from another model so that the model can answer the question better. 
-You should refer to the Correct Answer and the model's answer below to provide the feedback.
-Do not provide or include the correct answer directly in your feedback.
+You should refer to the `Correct Answer` and `Model's Answer` below and provide the feedback that can improve the model's thought and answer.
+Note that do not provide or include the answer (i.e., content of `Correct Answer`) directly in your feedback.
+Please also point out the output format of the model's response if it is not correct.
 
 ## Question
 {question}
@@ -32,6 +40,24 @@ Do not provide or include the correct answer directly in your feedback.
 
 Feedback:
 """
+
+## Prompt for feedback models
+FEEDBACK_PROMPT_MATH = """Your task is to provide a helpful feedback for the following response from another model so that the model can answer the math question better. 
+You should refer to the `Solution` and `Model's Answer` below and provide the feedback that can improve the model's thought and answer.
+Note that do not provide or include the answer (i.e., content of `Solution`) directly in your feedback.
+
+## Question
+{question}
+
+## Solution
+{answer}
+
+## Model's Answer
+{model_answer}
+
+Feedback:
+"""
+
 
 ## Prompt for base model to generate responses with feedbacks
 FEEDBACK_PROMPT_BASE = """The followings are a question and the previous answer from you. Unfortunately, your previous answer is incorrect or can be improved. 
@@ -51,6 +77,23 @@ Generate your new answer using the following format.
 
 Thought:
 Answer:
+"""
+
+## Prompt for base model to generate responses with feedbacks
+FEEDBACK_PROMPT_BASE_MATH = """The followings are a math question and the previous answer from you. Unfortunately, your previous answer is incorrect or can be improved. 
+Please generate a new response to the question based on the previous answer and the feedback from another model.
+Please do not include any explicit references to the feedback in your response (e.g., “As another model pointed out XX ...”, “The feedback is ...”). You should use the feedback to generate a new answer, but act as if you have not seen the feedback.
+
+## Question
+{question}
+
+## Previous answer
+{model_answer}
+
+## Feedback
+{feedback}
+
+Please reason step by step, and put your final answer within \\boxed{{}}.
 """
 
 

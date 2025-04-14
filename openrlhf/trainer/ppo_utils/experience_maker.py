@@ -33,8 +33,8 @@ from qwen_vl_utils import process_vision_info
 from gui_env.robust_parallel_desktop_env import ParallelDesktopEnv
 from agents.ui_tars import build_singleturn_prompt, parse_action_qwen2vl, parsing_response_to_pyautogui_code
 from openrlhf.trainer.ppo_utils.rewards import gui_agent_format_reward, english_format_reward
-from openrlhf.textgrad.feedback_vllm import FEEDBACK_PROMPT, FEEDBACK_PROMPT_BASE, PROMPT_BASE
-from openrlhf.textgrad.custom_reward_functions import check_answer_commonsense_qa
+from openrlhf.textgrad.feedback_vllm import FEEDBACK_PROMPT, FEEDBACK_PROMPT_BASE, PROMPT_BASE, FEEDBACK_PROMPT_MATH, FEEDBACK_PROMPT_BASE_MATH, PROMPT_BASE_MATH
+from openrlhf.textgrad.custom_reward_functions import check_answer_commonsense_qa, check_answer_math
 
 logger = init_logger(__name__)
 
@@ -1041,14 +1041,24 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
 
 
 class RemoteExperienceMaker_TG(NaiveExperienceMaker):
-    def __init__(self, *args, vllm_engines: List = None, feedback_model = None, packing_samples=False, multimodal=False, **kwargs):
+    def __init__(self, *args, vllm_engines: List = None, feedback_model = None, packing_samples=False, multimodal=False, feedback_rewards=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.vllm_engines = vllm_engines
         self.feedback_model = feedback_model
         self.packing_samples = packing_samples
         self.multimodal = multimodal
-        self.apply_chat_template = self.tokenizer.apply_chat_template
-        self.custom_reward_func = check_answer_commonsense_qa
+        self.feedback_rewards = feedback_rewards
+        if self.strategy.is_rank_0():
+            print(f"Feedback Rewards (degraded, keep, improved): {self.feedback_rewards}")
+        if self.strategy.args.apply_chat_template:
+            self.apply_chat_template = self.tokenizer.apply_chat_template
+        else:
+            self.apply_chat_template = None
+        if self.strategy.args.dataset_name == "math":
+            self.custom_reward_func = check_answer_math
+        else:
+            self.custom_reward_func = check_answer_commonsense_qa
+
 
     @torch.no_grad()
     def make_experience_list(self, all_prompts: Union[str, List[str]], all_labels, **generate_kwargs) -> List[Experience]:
@@ -1075,27 +1085,24 @@ class RemoteExperienceMaker_TG(NaiveExperienceMaker):
                 dist.broadcast_object_list(samples_list, src=dist.get_rank(), group=self.strategy.ring_attn_group)
             else:
                 world_size = torch.distributed.get_world_size() // args.ring_attn_size
-                samples_list = [None] * (
-                    args.rollout_batch_size * args.n_samples_per_prompt // world_size // args.micro_rollout_batch_size
-                )
-                dist.broadcast_object_list(
-                    samples_list, src=self.strategy.ring_attn_ranks[0], group=self.strategy.ring_attn_group
-                )
+                samples_list = [None] * (args.rollout_batch_size * args.n_samples_per_prompt // world_size // args.micro_rollout_batch_size)
+                dist.broadcast_object_list(samples_list, src=self.strategy.ring_attn_ranks[0], group=self.strategy.ring_attn_group)
         else:
             vllm_outputs_list = self.generate_samples(all_prompts, all_labels, **generate_kwargs)
 
         # vLLM offload when vllm_enable_sleep
         if self.strategy.args.vllm_enable_sleep:
             batch_vllm_engine_call(self.vllm_engines, "sleep")
-
         torch.cuda.empty_cache()
         torch.distributed.barrier()
         torch.cuda.synchronize()
 
         all_experiences = []
         for vllm_outputs in tqdm(vllm_outputs_list, total=len(vllm_outputs_list), desc="make_experience", disable=not self.strategy.is_rank_0()):
-        # for vllm_outputs in vllm_outputs_list:
-            experiences = self.make_experience(vllm_outputs)
+            if self.strategy.args.dataset_name == "math":
+                experiences = self.make_experience_math(vllm_outputs)
+            else:
+                experiences = self.make_experience(vllm_outputs)
             # Process experiences (reward shaping, etc.)
             experiences, rewards = self.process_experiences(experiences)
 
@@ -1280,17 +1287,17 @@ class RemoteExperienceMaker_TG(NaiveExperienceMaker):
         for sample_id, new_r in enumerate(new_rewards):
             for i in range(len(new_r)):
                 if new_r[i] == 0 and base_rewards[sample_id] == 0:
-                    diff_rewards[sample_id, i] = -0.5
+                    # diff_rewards[sample_id, i] = -0.5
+                    diff_rewards[sample_id, i] = 0.0
                 elif new_r[i] == 1 and base_rewards[sample_id] == 1:
-                    diff_rewards[sample_id, i] = 0.5
+                    diff_rewards[sample_id, i] = self.feedback_rewards[1]
+                elif new_r[i] == 1 and base_rewards[sample_id] == 0:
+                    diff_rewards[sample_id, i] = self.feedback_rewards[2]
+                elif new_r[i] == 0 and base_rewards[sample_id] == 1:
+                    diff_rewards[sample_id, i] = self.feedback_rewards[0]
                 else:
-                    diff_rewards[sample_id, i] = new_r[i] - base_rewards[sample_id]
-        
-        # # normalize each diff_rewards using mean and std within the sample_id
-        # for i in range(len(diff_rewards)):
-        #     mean = torch.mean(diff_rewards[i])
-        #     std = torch.std(diff_rewards[i]) + 1e-6
-        #     diff_rewards[i] = (diff_rewards[i] - mean) / std
+                    # diff_rewards[sample_id, i] = new_r[i] - base_rewards[sample_id]
+                    diff_rewards[sample_id, i] = 0.0
         
         # make Experience objects from new_samples_list
         experiences = []
@@ -1440,6 +1447,256 @@ class RemoteExperienceMaker_TG(NaiveExperienceMaker):
         #     time_str = str(timedelta(seconds=duration)).split(".")[0]
         #     logger.info(f"✨ Experience making completed in {time_str}")
         return experiences
+    
+
+    @torch.no_grad()
+    def make_experience_math(self, vllm_outputs: vLLM_outputs) -> List[Experience]:
+        """
+        Turn samples into experience by calculating logprobs, rewards, and kl divergence.
+        The size of each element in vllm_outputs corresponds to self.strategy.args.micro_rollout_batch_size.
+
+        This function does the following:
+        1. Get feedbacks from a teacher model
+        2. Add the feedbacks to the original prompts
+        3. Generate new responses from the base model
+        4. Get log_probs of the initial_model and base model to compute KL distance to refine reward values
+        5. Pack the above information into Experience dataclass
+        """
+        start_time = time.time()
+        args = self.strategy.args
+        assert args.n_feedback_samples_per_prompt == args.micro_train_batch_size, "n_feedback_samples_per_prompt must be equal to micro_train_batch_size"
+        self.actor.eval()
+        device = torch.cuda.current_device()
+
+        # extract values from samples
+        prompts = vllm_outputs.prompts
+        output_text = vllm_outputs.output_text
+        labels = vllm_outputs.labels
+        sequences = vllm_outputs.sequences
+        attention_mask = vllm_outputs.attention_mask
+        num_actions = vllm_outputs.num_actions
+        packed_seq_lens = vllm_outputs.packed_seq_lens
+
+        # compute rewards from the original responses: base_rewards = [r1, r2, ...] with the size of self.strategy.args.micro_rollout_batch_size.
+        base_acc, base_rewards = self.custom_reward_func(output_text, labels)
+
+        if self.strategy.args.vllm_enable_sleep:
+            from openrlhf.trainer.ray.vllm_engine import batch_vllm_engine_call
+            batch_vllm_engine_call(self.feedback_model, "wake_up")
+            torch.distributed.barrier()
+            torch.cuda.synchronize()
+        # get all_feedbacks: [[feedback1 for prompt1, feedback2 for prompt1, ...], [feedback1 for prompt2, feedback2 for prompt2, ...], ...].  len(all_feedbacks) == len(prompts), len(all_feedbacks[i]) == args.n_feedback_samples_per_prompt.
+        all_feedbacks, question_prompts, model_responses, all_labels = self.get_feedbacks_math(prompts, output_text, labels, multimodal=self.multimodal)
+        # vLLM offload when vllm_enable_sleep
+        if self.strategy.args.vllm_enable_sleep:
+            batch_vllm_engine_call(self.feedback_model, "sleep")
+        torch.cuda.empty_cache()
+        torch.distributed.barrier()
+        torch.cuda.synchronize()
+        
+        # add the feedbacks to the original prompts
+        output_text_feedback = [
+            FEEDBACK_PROMPT_BASE_MATH.format(question=prompt, model_answer=model_response, feedback=feedback)
+            for prompt, model_response, feedbacks in zip(question_prompts, model_responses, all_feedbacks)
+            for feedback in feedbacks # len(feedbacks) == args.n_feedback_samples_per_prompt
+        ]
+        # create base prompts for RL later
+        base_prompts = [
+            PROMPT_BASE_MATH.format(question=prompt)
+            for prompt, model_response, feedbacks in zip(question_prompts, model_responses, all_feedbacks)
+            for feedback in feedbacks # len(feedbacks) == args.n_feedback_samples_per_prompt
+        ]
+
+        if self.strategy.args.vllm_enable_sleep:
+            from openrlhf.trainer.ray.vllm_engine import batch_vllm_engine_call
+            batch_vllm_engine_call(self.vllm_engines, "wake_up")
+            torch.distributed.barrier()
+            torch.cuda.synchronize()
+        # get new responses from the model with feedbacks.
+        # new_samples_list = [vllm_outputs1, vllm_outputs2, ...], each vllm_outputsX has self.strategy.args.n_feedback_samples_per_prompt samples.
+        new_samples_list = self._generate_vllm_with_feedback(output_text_feedback, base_prompts, all_labels, multimodal=self.multimodal, 
+                                                    n_samples_per_prompt=1, pack_size=self.strategy.args.n_feedback_samples_per_prompt)
+        # vLLM offload when vllm_enable_sleep
+        if self.strategy.args.vllm_enable_sleep:
+            batch_vllm_engine_call(self.vllm_engines, "sleep")
+        torch.cuda.empty_cache()
+        torch.distributed.barrier()
+        torch.cuda.synchronize()
+
+        # get new rewards from the new responses
+        new_rewards = []
+        for new_samples in new_samples_list:
+            mean_acc, each_score = self.custom_reward_func(new_samples.output_text, new_samples.labels)
+            new_rewards.append(each_score)
+        
+        if dist.get_rank() == 0:
+            # only show the items where base_rewards == 0
+            for i, (base, new) in enumerate(zip(base_rewards, new_rewards)):
+                if base == 0:
+                    print(f"score after feedback: {new}")
+
+        # calculate the difference of rewards from the original responses
+        # new_rewards = [[r1, r2, ...], [r1, r2, ...], ...], each list is the size of self.strategy.args.n_feedback_samples_per_prompt.
+        assert len(base_rewards) == len(new_rewards), "The number of base rewards and new rewards must be the same. Current number of base rewards: {}, current number of new rewards: {}".format(len(base_rewards), len(new_rewards))
+        diff_rewards = torch.zeros((len(base_rewards), len(new_rewards[0])))
+        for sample_id, new_r in enumerate(new_rewards):
+            for i in range(len(new_r)):
+                if new_r[i] == False and base_rewards[sample_id] == False:
+                    # diff_rewards[sample_id, i] = -0.5
+                    diff_rewards[sample_id, i] = 0.0
+                elif new_r[i] == True and base_rewards[sample_id] == True:
+                    diff_rewards[sample_id, i] = self.feedback_rewards[1]
+                elif new_r[i] == True and base_rewards[sample_id] == False:
+                    diff_rewards[sample_id, i] = self.feedback_rewards[2]
+                elif new_r[i] == False and base_rewards[sample_id] == True:
+                    diff_rewards[sample_id, i] = self.feedback_rewards[0]
+                else:
+                    # diff_rewards[sample_id, i] = new_r[i] - base_rewards[sample_id]
+                    diff_rewards[sample_id, i] = 0.0
+        
+        # make Experience objects from new_samples_list
+        experiences = []
+        # Extract all information from samples in one pass, convert samples into lists of tensors and metadata for batch processing
+        sequences_list = [s.sequences for s in new_samples_list]
+        attention_mask_list = [s.attention_mask for s in new_samples_list]
+        num_actions_list = [s.num_actions for s in new_samples_list]
+        packed_seq_lens_list = [s.packed_seq_lens for s in new_samples_list]
+
+        # Move data to CPU for remote processing
+        sequences_cpu_list = [seq.to("cpu") for seq in sequences_list]
+        attention_mask_cpu_list = [mask.to("cpu") for mask in attention_mask_list]
+        
+        # Batch call initial model
+        if self.initial_model is not None:
+            base_action_log_probs_ref = self.initial_model.forward_batch.remote(
+                sequences=sequences_cpu_list,
+                num_actions=num_actions_list,
+                attention_mask=attention_mask_cpu_list,
+                logps_allgather=[True] * len(new_samples_list),
+                packed_seq_lens=packed_seq_lens_list,
+            )
+
+            if args.colocate_actor_ref or args.colocate_all_models:
+                ray.get([base_action_log_probs_ref])
+                ray.get([self.initial_model.empty_cache.remote()])
+        else:
+            base_action_log_probs_ref = ray.put([None] * len(new_samples_list))
+
+        # Batch call actor model
+        action_log_probs_list = []
+        for seq, num_acts, attn_mask, packed_lens in zip(
+            sequences_cpu_list, num_actions_list, attention_mask_cpu_list, packed_seq_lens_list
+        ):
+            action_log_probs = self.actor(
+                seq.to(device),
+                num_acts,
+                attn_mask.to(device),
+                ring_attn_group=self.strategy.ring_attn_group,
+                logps_allgather=True,
+                packed_seq_lens=packed_lens,
+            )
+            action_log_probs_list.append(action_log_probs)
+
+        actor_value_rm_time = time.time() - start_time
+        # Wait for all remote calls to complete
+        start = time.time()
+        base_action_log_probs_set = ray.get([base_action_log_probs_ref])
+        base_action_log_probs_list = base_action_log_probs_set[0]
+        wait_time = time.time() - start
+
+        # Avoid CUDA OOM when colocate models
+        if args.colocate_actor_ref or args.colocate_all_models:
+            torch.cuda.synchronize()
+            torch.cuda.empty_cache()
+
+        # Process results for each sample
+        for i, (samples, action_log_probs, base_action_log_probs, rewards) in enumerate(
+            zip(new_samples_list, action_log_probs_list, base_action_log_probs_list, diff_rewards)
+        ):
+            if base_action_log_probs is not None:
+                base_action_log_probs = base_action_log_probs.to(device)
+
+            # Broadcast rewards to all ring attention ranks when using remote RM
+            rewards = [rewards]
+            if self.remote_rm_url and self.strategy.ring_attn_group is not None:
+                if self.strategy.ring_attn_rank == 0:
+                    dist.broadcast_object_list(rewards, src=dist.get_rank(), group=self.strategy.ring_attn_group)
+                else:
+                    dist.broadcast_object_list(rewards, src=self.strategy.ring_attn_ranks[0], group=self.strategy.ring_attn_group)
+            r = rewards[0].to(device)
+
+            if (self.initial_model is not None) and (not args.use_kl_loss):
+                kl = compute_approx_kl(
+                    action_log_probs,
+                    base_action_log_probs,
+                    action_mask=samples.action_mask,
+                    kl_estimator=self.strategy.args.kl_estimator,
+                )
+            else:
+                kl = torch.zeros_like(action_log_probs, dtype=action_log_probs.dtype, device=device)
+
+            sequences = samples.sequences
+            attention_mask = samples.attention_mask
+            if not self.packing_samples:
+                kl_mean = masked_mean(kl, samples.action_mask, dim=-1)
+            else:
+                num_actions = samples.num_actions
+                packed_seq_lens = samples.packed_seq_lens
+                if self.strategy.ring_attn_group is not None:
+                    assert samples.pad_len is not None
+                    sequences, attention_mask, num_actions, packed_seq_lens, _, _, kl = unpad_sequences(
+                        pad_len=samples.pad_len,
+                        sequences=sequences,
+                        attention_mask=attention_mask,
+                        num_actions=num_actions,
+                        packed_seq_lens=packed_seq_lens,
+                        ring_attn_group=self.strategy.ring_attn_group,
+                        action_log_probs=action_log_probs,
+                        values=None,
+                        kl=kl,
+                    )
+                # Convert tensor into list of tensors for easier manipulation within dataset
+                sequences = unpacking_samples(sequences, packed_seq_lens)
+                attention_mask = None
+                action_log_probs = unpacking_samples(action_log_probs, num_actions)
+                if base_action_log_probs is not None:
+                    base_action_log_probs = unpacking_samples(base_action_log_probs, num_actions)
+
+                kl = unpacking_samples(kl, num_actions)
+                kl_mean = torch.tensor([each_kl.mean() for each_kl in kl], device=device)
+
+            if not args.use_kl_loss:
+                base_action_log_probs = None
+
+            info = {
+                "kl": kl_mean,
+                "reward": r,
+                "response_length": samples.response_length,
+                "total_length": samples.total_length,
+                "num_actions": samples.num_actions,
+            }
+
+            if self.strategy.args.perf:
+                self.perf_stats["actor_value_rm_time"] += actor_value_rm_time
+                self.perf_stats["wait_time"] += wait_time
+
+            experience = Experience(
+                sequences,
+                action_log_probs,
+                base_action_log_probs,
+                None,
+                None,
+                None,
+                attention_mask,
+                samples.action_mask,
+                info,
+                kl,
+                visual_inputs=samples.visual_inputs
+            )
+            experiences.append(experience)
+
+        self.actor.train()  # Reset model state
+        return experiences
 
 
 
@@ -1462,15 +1719,18 @@ class RemoteExperienceMaker_TG(NaiveExperienceMaker):
             temperature=kwargs.get("temperature", 1.0),
             top_p=kwargs.get("top_p", 1.0),
             top_k=kwargs.get("top_k", -1),
-            max_tokens=kwargs.get("max_new_tokens", 1024),
-            min_tokens=kwargs.get("min_new_tokens", 1),
+            max_tokens=kwargs.get("max_new_tokens", self.strategy.args.generate_max_len),
+            min_tokens=kwargs.get("min_new_tokens", 16),
             skip_special_tokens=kwargs.get("skip_special_tokens", False),
             include_stop_str_in_output=True,
         )
 
         # convert the prompts to chat-style
-        all_prompts_chat = [self.apply_chat_template([{"role": "user", "content": prompt}], tokenize=False, add_generation_prompt=True) 
-                            for prompt in all_prompts]
+        if self.apply_chat_template:
+            all_prompts_chat = [self.apply_chat_template([{"role": "user", "content": prompt}], tokenize=False, add_generation_prompt=True) 
+                                for prompt in all_prompts]
+        else:
+            all_prompts_chat = all_prompts
 
         # Expand prompt list based on the number of samples per prompt
         all_prompts = sum([[prompt] * n_samples_per_prompt for prompt in all_prompts_chat], [])
@@ -1670,18 +1930,21 @@ class RemoteExperienceMaker_TG(NaiveExperienceMaker):
             temperature=kwargs.get("temperature", 1.0),
             top_p=kwargs.get("top_p", 1.0),
             top_k=kwargs.get("top_k", -1),
-            max_tokens=kwargs.get("max_new_tokens", 1024),
-            min_tokens=kwargs.get("min_new_tokens", 1),
+            max_tokens=kwargs.get("max_new_tokens", self.strategy.args.generate_max_len),
+            min_tokens=kwargs.get("min_new_tokens", 16),
             skip_special_tokens=kwargs.get("skip_special_tokens", False),
             include_stop_str_in_output=True,
         )
 
         # convert the prompts to chat-style
-        all_prompts_chat = [self.apply_chat_template([{"role": "user", "content": prompt}], tokenize=False, add_generation_prompt=True) 
-                            for prompt in all_prompts]
-        
-        base_prompts_chat_ids = [self.apply_chat_template([{"role": "user", "content": prompt}], tokenize=True, add_generation_prompt=True) 
-                            for prompt in base_prompts]
+        if self.apply_chat_template:
+            all_prompts_chat = [self.apply_chat_template([{"role": "user", "content": prompt}], tokenize=False, add_generation_prompt=True) 
+                                for prompt in all_prompts]
+            base_prompts_chat_ids = [self.apply_chat_template([{"role": "user", "content": prompt}], tokenize=True, add_generation_prompt=True) 
+                                for prompt in base_prompts]
+        else:
+            all_prompts_chat = all_prompts
+            base_prompts_chat_ids = [self.tokenizer(prompt, padding=False, truncation=False)["input_ids"] for prompt in base_prompts]
 
         # Expand prompt list based on the number of samples per prompt
         all_prompts = sum([[prompt] * n_samples_per_prompt for prompt in all_prompts_chat], [])
@@ -1929,6 +2192,115 @@ class RemoteExperienceMaker_TG(NaiveExperienceMaker):
 
         all_prompts_feedback = [FEEDBACK_PROMPT.format(question=prompt, answer=label, model_answer=model_response) for prompt, label, model_response in zip(question_prompts, labels, model_responses)]
         all_prompts_chat = [self.apply_chat_template([{"role": "user", "content": prompt}], tokenize=False, add_generation_prompt=True) for prompt in all_prompts_feedback]
+
+        # Expand prompt list based on the number of samples per prompt
+        all_prompts = sum([[prompt] * args.n_feedback_samples_per_prompt for prompt in all_prompts_chat], [])
+        batch_size = (len(all_prompts) + len(llms) - 1) // len(llms)
+        all_labels = sum([[label] * args.n_feedback_samples_per_prompt for label in labels], [])
+
+        # Distribute requests to engines and collect responses to outputs
+        refs = []
+        if multimodal:
+            # For VLM
+            for i, llm in enumerate(llms):
+                messages = all_prompts[i * batch_size : (i + 1) * batch_size]
+                if messages:
+                    prompts = self.data_processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+                    images = [self.data_processor.get_images_from_messages(m) for m in messages]
+                    vllm_inputs = [{
+                            "prompt": p,
+                            "multi_modal_data":{"image": imgs} if imgs else None,
+                            "mm_processor_kwargs": kwargs["processor_kwargs"]
+                        } for p, imgs in zip(prompts,images)]
+                    refs.append(
+                        llm.add_requests.remote(rank, sampling_params=sampling_params, vllm_vision_input=vllm_inputs)
+                    )
+        else:
+            for i, llm in enumerate(llms):
+                messages = all_prompts[i * batch_size : (i + 1) * batch_size]
+                if messages:
+                    # prompts already are chat-style due to PromptDataset in ActorModelRayActor_TG class
+                    refs.append(llm.add_requests.remote(rank, sampling_params=sampling_params, vllm_vision_input=messages))
+
+        ray.get(refs)
+
+        # Make sure all requests are sent.
+        if self.strategy.ring_attn_group is None:
+            torch.distributed.barrier()
+        else:
+            time.sleep(3)
+
+        # Retrieve and combine results from all outputs
+        all_output_refs = []
+        for i, llm in enumerate(llms):
+            all_output_refs.append(llm.get_responses.remote(rank))
+        all_outputs = sum(ray.get(all_output_refs), [])
+
+        feedbacks = []
+        for output in all_outputs:
+            feedbacks.append(output.outputs[0].text)
+        # divide the feedbacks by the number of samples per prompt
+        feedbacks = [feedbacks[i:i+args.n_feedback_samples_per_prompt] for i in range(0, len(feedbacks), args.n_feedback_samples_per_prompt)]
+        
+        return feedbacks, question_prompts, model_responses, all_labels
+    
+
+    def get_feedbacks_math(self, all_prompts: list[str], output_text: list[str], labels: list[str], multimodal=False) -> Tuple[List[str], List[str], List[str], List[str]]:
+        """
+        For Math dataset.
+        1. Create prompts for feedback model
+        2. Expand prompt list based on the number of samples per prompt
+        3. Distribute requests to engines and collect responses to outputs
+        4. Return feedbacks
+
+
+        all_prompts: list[str]: all_prompts[0] is like this:
+        '<|im_start|>system\nPlease reason step by step, and put your final answer within \\boxed{{}}.<|im_end|>\n<|im_start|>user\n{input}<|im_end|>\n<|im_start|>assistant\n'
+        
+        output_text: list[str]: output_text[0] is like this:
+        'Thought: The king, as a figurehead, typically needs a secure location to feel safe. Castles have long been recognized as strong and secure structures, often seen in historical depictions or stories of kings and warriors. Throne rooms are associated with royal power but are not identified as primary safety havens for a king in general public imagination. The deck of cards is not a secure place for any individual. Forts are strategic locations meant for defensive purposes, not necessarily for general safety. Courts are locations for legal and political decisions but are not typically seen as safe havens for a king. Given these considerations, the castle is the most logical and historically accurate choice.\n\nAnswer: A<|im_end|>'
+        """
+        from vllm import SamplingParams
+        self.response_length_list = []
+        # round-robin load balance
+        rank = torch.distributed.get_rank() // self.strategy.ring_attn_size
+        world_size = torch.distributed.get_world_size() // self.strategy.ring_attn_size
+
+        # Select LLM engines: assign each rank an engine, or cycle through engines if world_size < engine_count
+        if len(self.feedback_model) <= world_size:
+            llms = [self.feedback_model[rank % len(self.feedback_model)]]
+        else:
+            llms = self.feedback_model[rank::world_size]
+
+        args = self.strategy.args
+
+        sampling_params = SamplingParams(
+            temperature=1.0,
+            top_p=1.0,
+            top_k=-1,
+            max_tokens=1024,
+            min_tokens=1,
+            skip_special_tokens=True,
+            include_stop_str_in_output=False,
+        )
+
+        # create prompts for feedback model
+        question_prompts = []
+        for prompt in all_prompts:
+            question_chars = prompt.split("user\n")[1].strip().split("<|im_end|>")[0].strip()
+            question_prompts.append(question_chars)
+
+        model_responses = []
+        for output in output_text:
+            answer_part = output
+            try:
+                answer = answer_part.split("<|im_end|>")[0].strip()
+            except IndexError:
+                answer = answer_part.strip()
+            model_responses.append(answer)
+
+        all_prompts_feedback = [FEEDBACK_PROMPT_MATH.format(question=prompt, answer=label, model_answer=model_response) for prompt, label, model_response in zip(question_prompts, labels, model_responses)]
+        all_prompts_chat = [self.tokenizer.apply_chat_template([{"role": "user", "content": prompt}], tokenize=False, add_generation_prompt=True) for prompt in all_prompts_feedback]
 
         # Expand prompt list based on the number of samples per prompt
         all_prompts = sum([[prompt] * args.n_feedback_samples_per_prompt for prompt in all_prompts_chat], [])

@@ -137,7 +137,6 @@ def train(args):
 
     # Feedback model
     feedback_model = feedback_vllm_engines
-    # feedback_model = FeedbackModel_vllm(feedback_vllm_engines, args)
 
     if args.init_kl_coef == 0:
         ref_model = None
@@ -414,7 +413,9 @@ if __name__ == "__main__":
     parser.add_argument("--ref_reward_offload", action="store_true", default=False)
 
     # Custom dataset
+    parser.add_argument("--dataset_name", type=str, default="commonsense_qa", help="HF dataset name or path")
     parser.add_argument("--prompt_data", type=str, default=None, help="HF dataset name or path")
+    parser.add_argument("--prompt_eval_data", type=str, default=None, help="HF dataset name or path")
     parser.add_argument(
         "--prompt_data_probs",
         type=str,
@@ -446,7 +447,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--wandb_run_name",
         type=str,
-        default="TG_%s" % datetime.now().strftime("%m%dT%H:%M"),
+        default="%s" % datetime.now().strftime("%m%dT%H:%M"),
     )
 
     # TensorBoard parameters
@@ -458,6 +459,8 @@ if __name__ == "__main__":
     # ModelScope parameters
     parser.add_argument("--use_ms", action="store_true", default=False)
     parser.add_argument("--multimodal", action="store_true", default=False)
+    parser.add_argument("--feedback_rewards", type=float, nargs=3, default=(-1.0, 1.0, 2.0), help="Rewards for (degraded, keep, improved) cases")
+
 
     args = parser.parse_args()
 

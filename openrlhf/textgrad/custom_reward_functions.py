@@ -3,6 +3,9 @@ Custom reward functions for TextGrad.
 """
 
 import re
+from openrlhf.datasets.math_data.math_utils import run_execute, extract_answer
+from openrlhf.datasets.math_data.python_executor import PythonExecutor
+from openrlhf.datasets.math_data.evaluate import evaluate
 
 
 def check_answer_commonsense_qa(output_text: list[str], labels: list[str]) -> list[int]:
@@ -35,26 +38,54 @@ def check_answer_commonsense_qa(output_text: list[str], labels: list[str]) -> li
     correct = [1 if a is not None and a == l else 0 for a, l in zip(answers, label_answers)]
     return correct
 
-    # # extract answer letter from output_text
-    # answer_pattern = r"Answer:\s*(\w)"
-    # answers = []
-    # for text in output_text:
-    #     match = re.search(answer_pattern, text)
-    #     if match:
-    #         answers.append(match.group(1))
-    #     else:
-    #         answers.append(None)  # No answer found
+
+def check_answer_math(output_text: list[str], labels: list[str], prompt_type: str="qwen25-math-cot", data_name: str='math') -> list[int]:
+    """
+    Check if the answer is correct for Hendrycks's math benchmark.
+    Assume labels are 'gt_cot' from MathDataset.
+    """
+    executor = PythonExecutor(get_answer_from_stdout=True)
+    stop_words = ["</s>", "<|im_end|>", "<|endoftext|>"]
+    n_sampling = 1
+
+    codes = []
+    for output in output_text:
+        for stop_word in stop_words:
+            if stop_word in output:
+                output = output.split(stop_word)[0].strip()
+        codes.append(output)
     
-    # # extract answer letter from labels
-    # label_answers = []
-    # for label in labels:
-    #     match = re.search(answer_pattern, label)
-    #     if match:
-    #         label_answers.append(match.group(1))
-    #     else:
-    #         label_answers.append(None)  # No answer found
-    
-    # # check if each answer is equal to the corresponding label
-    # correct = [1 if a is not None and a == l else 0 for a, l in zip(answers, label_answers)]
-    # return correct
+    # extract preds
+    results = [
+        run_execute(executor, code, prompt_type, data_name) for code in codes
+    ]
+
+    all_samples = []
+
+    for i, gt_cot in enumerate(labels):
+        code = codes[i * n_sampling : (i + 1) * n_sampling]
+        result = results[i * n_sampling : (i + 1) * n_sampling]
+        preds = [item[0] for item in result]
+        reports = [item[1] for item in result]
+        gt_ans = extract_answer(gt_cot, data_name)
+        sample = {
+            "idx": i,
+            "gt_cot": gt_cot,
+            "gt": gt_ans,
+            "code": code,
+            "report": reports,
+            "pred": preds
+        }
+        all_samples.append(sample)
+
+    # add processed samples
+    all_samples, result_json = evaluate(
+        samples=all_samples,
+        data_name=data_name,
+        prompt_type=prompt_type,
+        execute=True,
+    )
+
+    # print(f"Accuracy: {result_json['acc']}")
+    return result_json['acc'], result_json['each_score']
 

@@ -16,7 +16,7 @@ import torch.distributed
 from transformers.trainer import get_scheduler
 from datasets import load_dataset
 
-from openrlhf.datasets import PromptDataset, SFTDataset, CommonSenseQADataset
+from openrlhf.datasets import PromptDataset, SFTDataset, CommonSenseQADataset, MathDataset
 from openrlhf.models import Actor
 from openrlhf.models.lmm_kits.utils import get_data_processor
 from openrlhf.trainer import PPOTrainer
@@ -31,7 +31,7 @@ from .launcher import BasePPORole
 from .utils import get_physical_gpu_id
 
 from gui_env.robust_parallel_desktop_env import ParallelDesktopEnv
-from openrlhf.textgrad.custom_reward_functions import check_answer_commonsense_qa
+from openrlhf.textgrad.custom_reward_functions import check_answer_commonsense_qa, check_answer_math
 
 
 class ActorPPOTrainer(PPOTrainer):
@@ -391,6 +391,7 @@ class ActorPPOTrainer_TG(PPOTrainer):
             feedback_model=self.feedback_model,
             packing_samples=self.strategy.args.packing_samples,
             multimodal=self.strategy.args.multimodal,
+            feedback_rewards=self.strategy.args.feedback_rewards,
         )
 
         backend = getattr(self.strategy.args, "vllm_sync_backend", "nccl")
@@ -461,8 +462,18 @@ class ActorPPOTrainer_TG(PPOTrainer):
         torch.distributed.barrier()
         status = {}
 
+        # vLLM wakeup when vllm_enable_sleep
+        if self.strategy.args.vllm_enable_sleep:
+            from openrlhf.trainer.ray.vllm_engine import batch_vllm_engine_call
+            batch_vllm_engine_call(self.vllm_engines, "wake_up")
+            torch.distributed.barrier()
+            torch.cuda.synchronize()
+
         if global_steps == 0 or global_steps == 1:
-            eval_accuracy = self.evaluate()
+            if self.strategy.args.dataset_name == "math":
+                eval_accuracy = self.evaluate_math()
+            else:
+                eval_accuracy = self.evaluate()
             print(f"Init eval accuracy: {eval_accuracy}")
             status["eval_accuracy"] = eval_accuracy
             if self.strategy.is_rank_0() and self._wandb is not None:
@@ -471,6 +482,13 @@ class ActorPPOTrainer_TG(PPOTrainer):
                     for k, v in {**status, "global_step": global_steps}.items()
                 }
                 self._wandb.log(logs)
+
+        # vLLM offload when vllm_enable_sleep
+        if self.strategy.args.vllm_enable_sleep:
+            batch_vllm_engine_call(self.vllm_engines, "sleep")
+        torch.cuda.empty_cache()
+        torch.distributed.barrier()
+        torch.cuda.synchronize()
 
         # 2. triger remote critic model training
         if self.critic_train_remote:
@@ -521,8 +539,22 @@ class ActorPPOTrainer_TG(PPOTrainer):
 
         # 6. evaluate
         if self.strategy.args.eval:
-            eval_accuracy = self.evaluate()
+            if self.strategy.args.vllm_enable_sleep:
+                from openrlhf.trainer.ray.vllm_engine import batch_vllm_engine_call
+                batch_vllm_engine_call(self.vllm_engines, "wake_up")
+                torch.distributed.barrier()
+                torch.cuda.synchronize()
+            if self.strategy.args.dataset_name == "math":
+                eval_accuracy = self.evaluate_math()
+            else:
+                eval_accuracy = self.evaluate()
             status["eval_accuracy"] = eval_accuracy
+
+            if self.strategy.args.vllm_enable_sleep:
+                batch_vllm_engine_call(self.vllm_engines, "sleep")
+            torch.cuda.empty_cache()
+            torch.distributed.barrier()
+            torch.cuda.synchronize()
 
         return status
 
@@ -691,13 +723,12 @@ class ActorPPOTrainer_TG(PPOTrainer):
         offload_deepspeed_states(self.actor.model)
 
     def evaluate(self):
-        print("Evaluating...")
         self.actor.eval()
         from vllm import SamplingParams
         self.response_length_list = []
+        # llms = self.vllm_engines
         rank = torch.distributed.get_rank() // self.strategy.ring_attn_size
         world_size = torch.distributed.get_world_size() // self.strategy.ring_attn_size
-
         if len(self.vllm_engines) <= world_size:
             llms = [self.vllm_engines[rank % len(self.vllm_engines)]]
         else:
@@ -707,8 +738,8 @@ class ActorPPOTrainer_TG(PPOTrainer):
             temperature=0,
             top_p=1.0,
             top_k=-1,
-            max_tokens=1024,
-            min_tokens=1,
+            max_tokens=768,
+            min_tokens=16,
             skip_special_tokens=False,
             include_stop_str_in_output=False,
         )
@@ -717,7 +748,7 @@ class ActorPPOTrainer_TG(PPOTrainer):
         correct = 0
         total = 0
 
-        for prompts, labels in self.prompts_dataloader_eval:
+        for prompts, labels in tqdm(self.prompts_dataloader_eval, total=len(self.prompts_dataloader_eval), desc="Evaluate", disable=not self.strategy.is_rank_0()):
             all_prompts_chat = [self.tokenizer.apply_chat_template([{"role": "user", "content": prompt}], tokenize=False, add_generation_prompt=True) for prompt in prompts]
 
             refs = []
@@ -748,8 +779,98 @@ class ActorPPOTrainer_TG(PPOTrainer):
             correct += sum(judges)
             total += len(judges)
 
-        print(f"Evaluate Accuracy: {correct / total}")
-        return correct / total
+        # Convert to tensors and move to CUDA
+        correct_tensor = torch.tensor(correct, device="cuda", dtype=torch.float)
+        total_tensor = torch.tensor(total, device="cuda", dtype=torch.float)
+
+        # All-reduce across all processes
+        torch.distributed.all_reduce(correct_tensor, op=torch.distributed.ReduceOp.SUM)
+        torch.distributed.all_reduce(total_tensor, op=torch.distributed.ReduceOp.SUM)
+
+        if total_tensor.item() > 0:
+            accuracy = correct_tensor.item() / total_tensor.item()
+        else:
+            accuracy = 0.0
+
+        if self.strategy.is_rank_0():
+            print(f"Evaluate Accuracy (avg over all ranks): {accuracy:.4f}")
+
+        return accuracy
+    
+    def evaluate_math(self):
+        self.actor.eval()
+        from vllm import SamplingParams
+        self.response_length_list = []
+        # llms = self.vllm_engines
+        rank = torch.distributed.get_rank() // self.strategy.ring_attn_size
+        world_size = torch.distributed.get_world_size() // self.strategy.ring_attn_size
+        if len(self.vllm_engines) <= world_size:
+            llms = [self.vllm_engines[rank % len(self.vllm_engines)]]
+        else:
+            llms = self.vllm_engines[rank::world_size]
+
+        sampling_params = SamplingParams(
+            temperature=0,
+            top_p=1.0,
+            top_k=-1,
+            max_tokens=768,
+            min_tokens=16,
+            skip_special_tokens=False,
+            include_stop_str_in_output=False,
+        )
+
+        eval_batch_size = 512
+        correct = 0
+        total = 0
+
+        for prompts, labels in tqdm(self.prompts_dataloader_eval, total=len(self.prompts_dataloader_eval), desc="Evaluate", disable=not self.strategy.is_rank_0()):
+            refs = []
+            with torch.no_grad():
+                for i, llm in enumerate(llms):
+                    messages = prompts[i * eval_batch_size : (i + 1) * eval_batch_size]
+                    if messages:
+                        refs.append(llm.add_requests.remote(rank, sampling_params=sampling_params, vllm_vision_input=messages))
+            ray.get(refs)
+            if self.strategy.ring_attn_group is None:
+                torch.distributed.barrier()
+            else:
+                time.sleep(3)
+
+            # Retrieve and combine results from all outputs
+            all_output_refs = []
+            for i, llm in enumerate(llms):
+                all_output_refs.append(llm.get_responses.remote(rank))
+            all_outputs = sum(ray.get(all_output_refs), [])
+
+            model_responses = []
+            for output in all_outputs:
+                model_responses.append(output.outputs[0].text)
+            
+            # calculate the accuracy
+            acc, each_score = check_answer_math(model_responses, labels, prompt_type="qwen25-math-cot", data_name="math")
+            # judges = check_answer_commonsense_qa(model_responses, labels)
+            correct += acc
+            total += 1
+
+        # Convert to tensors and move to CUDA
+        correct_tensor = torch.tensor(correct, device="cuda", dtype=torch.float)
+        total_tensor = torch.tensor(total, device="cuda", dtype=torch.float)
+
+        # All-reduce across all processes
+        torch.distributed.all_reduce(correct_tensor, op=torch.distributed.ReduceOp.SUM)
+        torch.distributed.all_reduce(total_tensor, op=torch.distributed.ReduceOp.SUM)
+
+        if total_tensor.item() > 0:
+            accuracy = correct_tensor.item() / total_tensor.item()
+        else:
+            accuracy = 0.0
+
+        if self.strategy.is_rank_0():
+            print(f"Evaluate Accuracy (avg over all ranks): {accuracy:.4f}")
+
+        return accuracy
+
+
         
 
 
@@ -1088,7 +1209,7 @@ class ActorModelRayActor_TG(BasePPORole):
         )
 
         # prepare_datasets
-        self.prepare_datasets()
+        self.prepare_datasets(args.dataset_name)
 
         # configure scheduler
         self.num_update_steps_per_episodes = (
@@ -1134,30 +1255,48 @@ class ActorModelRayActor_TG(BasePPORole):
         if strategy.args.deepspeed_enable_sleep:
             offload_deepspeed_states(self.actor.model)
 
-    def prepare_datasets(self):
+    def prepare_datasets(self, dataset_name='commonsense_qa'):
         strategy = self.strategy
         args = self.strategy.args
-
-        prompts_data = load_dataset(args.prompt_data, split='train')
-        self.prompts_dataset = CommonSenseQADataset(prompts_data, self.tokenizer, strategy, input_template=args.input_template)
-        self.prompts_dataloader = strategy.setup_dataloader(
-            self.prompts_dataset,
-            args.rollout_batch_size // (strategy.world_size // strategy.ring_attn_size),
-            True,
-            True,
-        )
-
-        if args.eval:
-            prompts_data = load_dataset(args.prompt_data, split='validation')
-            self.prompts_dataset_eval = CommonSenseQADataset(prompts_data, self.tokenizer, strategy, input_template=args.input_template)
-            self.prompts_dataloader_eval = strategy.setup_dataloader(
-                self.prompts_dataset_eval,
+        if dataset_name == 'commonsense_qa':
+            prompts_data = load_dataset(args.prompt_data, split='train')
+            self.prompts_dataset = CommonSenseQADataset(prompts_data, self.tokenizer, strategy, input_template=args.input_template)
+            self.prompts_dataloader = strategy.setup_dataloader(
+                self.prompts_dataset,
                 args.rollout_batch_size // (strategy.world_size // strategy.ring_attn_size),
                 True,
                 True,
             )
-        else:
-            self.prompts_dataloader_eval = None
+            if args.eval:
+                prompts_data = load_dataset(args.prompt_data, split='validation')
+                self.prompts_dataset_eval = CommonSenseQADataset(prompts_data, self.tokenizer, strategy, input_template=args.input_template)
+                self.prompts_dataloader_eval = strategy.setup_dataloader(
+                    self.prompts_dataset_eval,
+                    args.rollout_batch_size // (strategy.world_size // strategy.ring_attn_size),
+                    True,
+                    True,
+                )
+            else:
+                self.prompts_dataloader_eval = None
+
+        elif dataset_name == 'math':
+            self.prompts_dataset = MathDataset(args.prompt_data)
+            self.prompts_dataloader = strategy.setup_dataloader(
+                self.prompts_dataset,
+                args.rollout_batch_size // (strategy.world_size // strategy.ring_attn_size),
+                True,
+                True,
+            )
+            if args.eval:
+                self.prompts_dataset_eval = MathDataset(args.prompt_eval_data, ratio=0.3)
+                self.prompts_dataloader_eval = strategy.setup_dataloader(
+                    self.prompts_dataset_eval,
+                    args.rollout_batch_size // (strategy.world_size // strategy.ring_attn_size),
+                    True,
+                    True,
+                )
+            else:
+                self.prompts_dataloader_eval = None
 
         self.pretrain_dataloader = None
 
@@ -1243,21 +1382,6 @@ class ActorModelRayActor_TG(BasePPORole):
                 torch.distributed.barrier()
                 torch.cuda.synchronize()
 
-        
-        # if args.eval:
-        #     print(f"Evaluate a model before training")
-        #     if self.strategy.args.vllm_enable_sleep:
-        #         batch_vllm_engine_call(vllm_engines, "wake_up")
-        #     torch.distributed.barrier()
-        #     torch.cuda.synchronize()
-
-        #     self.evaluate(vllm_engines)
-
-        #     if self.strategy.args.vllm_enable_sleep:
-        #         batch_vllm_engine_call(vllm_engines, "sleep")
-        #         torch.distributed.barrier()
-        #         torch.cuda.synchronize()
-        
         trainer.fit(
             args,
             self.prompts_dataloader,

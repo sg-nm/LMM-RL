@@ -2,7 +2,22 @@ from vllm import LLM, SamplingParams
 from PIL import Image
 import os
 from datasets import load_dataset
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
+tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B-Instruct")
+model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-3B-Instruct")
+
+prompt = ["What is the life of a human? Please answer in English.", "What is the life of a cat?"]
+prompt_ids = [tokenizer(p, return_tensors="pt", padding=False, truncation=False)["input_ids"] for p in prompt]
+
+messages1 = tokenizer.apply_chat_template(
+    [
+        {"role": "user", "content": "What is the life of a human? Please answer in English."},
+    ],
+    tokenize=True,
+)
+
+import pdb; pdb.set_trace()
 
 # datasets = load_dataset("tau/commonsense_qa", split="train")
 
