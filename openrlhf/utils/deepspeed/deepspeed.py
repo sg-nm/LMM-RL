@@ -17,7 +17,7 @@ from torch import distributed as dist
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 
-from openrlhf.models import Actor
+from openrlhf.models import Actor, MultiModalActor
 from openrlhf.models.ring_attn_utils import get_ring_attn_group, set_ring_attn_group, substitute_ring_flash_attn
 from openrlhf.utils.distributed_sampler import DistributedSampler
 
@@ -125,7 +125,7 @@ class DeepspeedStrategy(ABC):
         return get_ring_attn_group()
 
     def create_optimizer(self, model, **kwargs) -> Optimizer:
-        if isinstance(model, Actor):
+        if isinstance(model, Actor) or isinstance(model, MultiModalActor):
             model = model.model
         # Optimizer
         AdamOptimizer = DeepSpeedCPUAdam if self.adam_offload else FusedAdam
@@ -134,7 +134,7 @@ class DeepspeedStrategy(ABC):
         return optim
 
     def backward(self, loss: torch.Tensor, model: nn.Module, optimizer: optim.Optimizer, **kwargs) -> None:
-        if isinstance(model, Actor):
+        if isinstance(model, Actor) or isinstance(model, MultiModalActor):
             model = model.model
         model.backward(loss)
 
@@ -146,7 +146,7 @@ class DeepspeedStrategy(ABC):
         name="model",
         **kwargs,
     ) -> None:
-        if isinstance(model, Actor):
+        if isinstance(model, Actor) or isinstance(model, MultiModalActor):
             model = model.model
         model.step()
 
@@ -185,7 +185,7 @@ class DeepspeedStrategy(ABC):
         )
 
     def _unwrap_model(self, model) -> nn.Module:
-        if isinstance(model, Actor):
+        if isinstance(model, Actor) or isinstance(model, MultiModalActor):
             return self._unwrap_model(model.model)
         elif hasattr(model, "module"):
             return model.module
@@ -210,7 +210,7 @@ class DeepspeedStrategy(ABC):
         return ret[0] if len(ret) == 1 else ret
 
     def _ds_init_train_model(self, model, optim, scheduler):
-        is_actor = isinstance(model, Actor)
+        is_actor = isinstance(model, Actor) or isinstance(model, MultiModalActor)
         ds_config = self.get_ds_train_config(is_actor)
 
         engine, optim, _, scheduler = deepspeed.initialize(
@@ -256,7 +256,7 @@ class DeepspeedStrategy(ABC):
     def _ds_init_eval_model(self, model):
         if not model:
             return model
-        is_actor = isinstance(model, Actor)
+        is_actor = isinstance(model, Actor) or isinstance(model, MultiModalActor)
         ds_config = self.get_ds_eval_config(offload=getattr(model, "_offload", False))
 
         engine, *_ = deepspeed.initialize(

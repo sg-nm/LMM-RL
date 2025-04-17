@@ -162,6 +162,7 @@ class PPOTrainer(ABC):
             micro_train_batch_size, self.data_processor, buffer_limit, buffer_cpu_offload, packing_samples,
             drop_maxlen=self.args.drop_maxlen, 
             maxlen=self.args.generate_max_len + prompt_max_len,
+            multimodal=self.args.multimodal,
         )
 
         # wandb/tensorboard setting
@@ -206,8 +207,7 @@ class PPOTrainer(ABC):
         num_update_steps_per_episodes=1,
     ) -> None:
         num_rollouts_per_episodes = (
-            num_update_steps_per_episodes
-            * args.train_batch_size
+            num_update_steps_per_episodes * args.train_batch_size
             // args.max_epochs
             // args.rollout_batch_size
             // args.n_samples_per_prompt
@@ -229,32 +229,53 @@ class PPOTrainer(ABC):
         consumed_samples = consumed_samples % (num_rollouts_per_episodes * args.rollout_batch_size)
 
         for episode in range(start_episode, args.num_episodes):
-            if isinstance(self.prompts_dataloader.sampler, DistributedSampler):
-                self.prompts_dataloader.sampler.set_epoch(episode, consumed_samples=0 if episode > start_episode else consumed_samples)
-            pbar = tqdm(range(self.prompts_dataloader.__len__()), desc=f"Episode [{episode + 1}/{args.num_episodes}]", disable=not self.strategy.is_rank_0(),)
+            if self.prompts_dataloader is not None:
+                if isinstance(self.prompts_dataloader.sampler, DistributedSampler):
+                    self.prompts_dataloader.sampler.set_epoch(episode, consumed_samples=0 if episode > start_episode else consumed_samples)
+                pbar = tqdm(range(self.prompts_dataloader.__len__()), desc=f"Episode [{episode + 1}/{args.num_episodes}]", disable=not self.strategy.is_rank_0(),)
 
-            for rand_prompts, labels in self.prompts_dataloader:
-                for i, experience in enumerate(self.experience_maker.make_experience_list(rand_prompts, labels, **self.generate_kwargs)):
+                for rand_prompts, labels in self.prompts_dataloader:
+                    for i, experience in enumerate(self.experience_maker.make_experience_list(rand_prompts, labels, **self.generate_kwargs)):
+                        if i == 0:
+                            output = self.tokenizer.batch_decode(experience.sequences[0].unsqueeze(0), skip_special_tokens=True)
+                            self.strategy.print(output)
+                        self.replay_buffer.append(experience)
+
+                    if self.args.advantage_estimator != "group_norm" and self.args.advantage_estimator != "uniform":
+                        self.replay_buffer.normalize("advantages", self.strategy)
+                    status = self.ppo_train(steps)
+                    self.replay_buffer.clear()
+
+                    if "kl" in status:
+                        self.kl_ctl.update(status["kl"], args.rollout_batch_size * args.n_samples_per_prompt)
+                    pbar.set_postfix(status)
+                    # logs/checkpoints
+                    client_states = {"consumed_samples": steps * args.rollout_batch_size}
+                    self.save_logs_and_checkpoints(args, steps, pbar, status, client_states)
+                    pbar.update()
+                    steps = steps + 1
+            else:
+                for i, experience in enumerate(self.experience_maker.make_experience_list(**self.generate_kwargs)):
                     if i == 0:
                         output = self.tokenizer.batch_decode(experience.sequences[0].unsqueeze(0), skip_special_tokens=True)
                         self.strategy.print(output)
                     self.replay_buffer.append(experience)
 
-                if self.args.advantage_estimator != "group_norm" and self.args.advantage_estimator != "uniform":
-                    self.replay_buffer.normalize("advantages", self.strategy)
-                status = self.ppo_train(steps)
-                self.replay_buffer.clear()
+                    if self.args.advantage_estimator != "group_norm" and self.args.advantage_estimator != "uniform":
+                        self.replay_buffer.normalize("advantages", self.strategy)
+                    status = self.ppo_train(steps)
+                    self.replay_buffer.clear()
 
-                if "kl" in status:
-                    self.kl_ctl.update(status["kl"], args.rollout_batch_size * args.n_samples_per_prompt)
-                pbar.set_postfix(status)
+                    if "kl" in status:
+                        self.kl_ctl.update(status["kl"], args.rollout_batch_size * args.n_samples_per_prompt)
+                    # pbar.set_postfix(status)
 
-                # logs/checkpoints
-                client_states = {"consumed_samples": steps * args.rollout_batch_size}
-                self.save_logs_and_checkpoints(args, steps, pbar, status, client_states)
+                    # logs/checkpoints
+                    client_states = {"consumed_samples": steps * args.rollout_batch_size}
+                    self.save_logs_and_checkpoints(args, steps, None, status, client_states)
+                    # pbar.update()
+                    steps = steps + 1
 
-                pbar.update()
-                steps = steps + 1
 
         if self._wandb is not None and self.strategy.is_rank_0():
             self._wandb.finish()
@@ -566,11 +587,11 @@ class PPOTrainer(ABC):
     def save_logs_and_checkpoints(self, args, global_step, step_bar, logs_dict={}, client_states={}):
         if global_step % args.logging_steps == 0:
             # wandb
-            response_length_list = torch.tensor(self.experience_maker.response_length_list)
-            gathered_response_length_list = [None for _ in range(dist.get_world_size())]
-            dist.all_gather_object(gathered_response_length_list, response_length_list)
-            response_length_list = torch.cat(gathered_response_length_list).tolist()
-            assert len(response_length_list) > 0
+            # response_length_list = torch.tensor(self.experience_maker.response_length_list)
+            # gathered_response_length_list = [None for _ in range(dist.get_world_size())]
+            # dist.all_gather_object(gathered_response_length_list, response_length_list)
+            # response_length_list = torch.cat(gathered_response_length_list).tolist()
+            # assert len(response_length_list) > 0
             if self._wandb is not None and self.strategy.is_rank_0():
                 logs = {
                     "train/%s" % k: v
@@ -581,9 +602,9 @@ class PPOTrainer(ABC):
                 }
                 if self.experience_maker.perf_stats is not None:
                     logs.update({f"perf/experience_maker/{k}": v for k, v in self.experience_maker.perf_stats.items()})
-                from wandb import Histogram
-                response_length_list = Histogram(response_length_list)
-                logs["response_length_dist"] = response_length_list
+                # from wandb import Histogram
+                # response_length_list = Histogram(response_length_list)
+                # logs["response_length_dist"] = response_length_list
                 self._wandb.log(logs)
             # TensorBoard
             elif self._tensorboard is not None and self.strategy.is_rank_0():

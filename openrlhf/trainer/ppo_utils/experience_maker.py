@@ -97,6 +97,9 @@ class Experience:
         self.info = {key: to(value, device) for key, value in self.info.items()}
         if self.visual_inputs is not None:
             self.visual_inputs = {key: to(value, device) for key, value in self.visual_inputs.items()}
+        # if self.visual_inputs is not None:
+        #     for i in range(len(self.visual_inputs)):
+        #         self.visual_inputs[i] = {key: to(value, device) for key, value in self.visual_inputs[i].items()}
         return self
 
     def pin_memory(self):
@@ -112,6 +115,9 @@ class Experience:
         self.info = {key: pin_memory(value) for key, value in self.info.items()}
         if self.visual_inputs is not None:
             self.visual_inputs = {key: pin_memory(value) for key, value in self.visual_inputs.items()}
+        # if self.visual_inputs is not None:
+        #     for i in range(len(self.visual_inputs)):
+        #         self.visual_inputs[i] = {key: pin_memory(value) for key, value in self.visual_inputs[i].items()}
         return self
 
 
@@ -226,6 +232,8 @@ class vLLM_outputs:
     total_length: torch.Tensor
     visual_inputs: Optional[Dict]
     pad_len: Optional[int]
+
+
 
 
 

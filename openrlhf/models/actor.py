@@ -6,13 +6,14 @@ import torch.nn as nn
 from torch.nn import functional as F
 from peft import LoraConfig, TaskType, get_peft_model
 from peft.tuners.lora import LoraLayer
-from transformers import BitsAndBytesConfig, AutoModelForCausalLM
+from transformers import BitsAndBytesConfig, AutoModelForCausalLM, Qwen2_5_VLForConditionalGeneration
 from transformers.integrations.deepspeed import HfDeepSpeedConfig
 from flash_attn.utils.distributed import all_gather
 
 from .ring_attn_utils import convert_ring_attn_params, set_hacked_position_ids, clear_hacked_position_ids
 from .utils import log_probs_from_logits, reset_position_ids
 from openrlhf.models.lmm_kits.utils import get_generation_cls, hack_peft_model, smart_load_config
+from openrlhf.models.lmm_kits.qwen2_5_vl.patch import Patch
 
 
 
@@ -349,10 +350,13 @@ class MultiModalActor(nn.Module):
             else:
                 nf4_config = None
 
-            #There is no AutoModelForConditionalGeneration in transformers. We manually implement it.
-            config = smart_load_config(pretrain_or_model)
-            model_cls = get_generation_cls(config, use_liger_kernel=use_liger_kernel)
-            self.model = model_cls.from_pretrained(
+            ## There is no AutoModelForConditionalGeneration in transformers. We manually implement it.
+            # config = smart_load_config(pretrain_or_model)
+            # model_cls = get_generation_cls(config, use_liger_kernel=use_liger_kernel)
+            if use_liger_kernel:
+                Patch.apply_liger_kernel()
+            Patch._load_all_patches()
+            self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
                 pretrain_or_model,
                 trust_remote_code=False,
                 attn_implementation=attn_implementation,

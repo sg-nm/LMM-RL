@@ -58,6 +58,15 @@ Note that do not provide or include the answer (i.e., content of `Solution`) dir
 Feedback:
 """
 
+## Prompt for feedback models on card game
+FEEDBACK_PROMPT_CARD = """Your task is to provide a helpful feedback for another model so that the model can achieve the goal better. 
+You should refer to the `Model's Answer` and `Verification message` below and provide the feedback that can improve the model's thought and answer.
+Note that DO NOT provide or include the answer of the task directly in your feedback even if you know it.
+Please also point out the output format of the model's response if it is not correct.
+
+{task}
+"""
+
 
 ## Prompt for base model to generate responses with feedbacks
 FEEDBACK_PROMPT_BASE = """The followings are a question and the previous answer from you. Unfortunately, your previous answer is incorrect or can be improved. 
@@ -96,6 +105,23 @@ Please do not include any explicit references to the feedback in your response (
 Please reason step by step, and put your final answer within \\boxed{{}}.
 """
 
+## Prompt for base model to generate responses with feedbacks
+FEEDBACK_PROMPT_BASE_CARD = """Your task is to solve the following problem. Unfortunately, your previous answers are incorrect or can be improved. 
+Please generate a new answer based on your previous answers and the feedbacks from another model below.
+Please DO NOT include any explicit references to the feedback in your response (e.g., “As another model pointed out XX ...”, “The feedback says ...”).
+You should use the feedback to generate a new answer, but act as if you have not seen the feedback.
+
+{task}
+"""
+
+RESPONSE_PROMPT_CARD = """Your response should be a valid json file in the following format:
+{{
+  "cards": [x, y, z, w], where {face_card_msg},
+  "number": [a, b, c, d], where a, b, c, and d are the numbers on the cards,
+  "thought": 'a thought process to build the formula',
+  "formula": 'an equation that equals {target_number}',
+}}
+"""
 
 
 class FeedbackModel_vllm:
