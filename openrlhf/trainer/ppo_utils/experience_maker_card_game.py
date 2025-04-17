@@ -790,7 +790,6 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         for i, llm in enumerate(llms):
             all_output_refs.append(llm.get_responses.remote(rank))
         all_outputs = sum(ray.get(all_output_refs), [])
-        
 
         model_responses_list = []
         for output in all_outputs:

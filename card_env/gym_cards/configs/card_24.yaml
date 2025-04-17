@@ -30,7 +30,7 @@ env_config:
   resolution: 768
   face_cards_color: "black"
   verify_iter: 5
-  num_steps: 128
+  num_steps: 32
 
 model: qwen25-vl
 model_path: "Qwen/Qwen2.5-VL-3B-Instruct"

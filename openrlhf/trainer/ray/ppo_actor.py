@@ -37,7 +37,7 @@ from .launcher import BasePPORole
 from .utils import get_physical_gpu_id
 
 from openrlhf.trainer.ppo_utils.experience_maker_card_game import RemoteExperienceMaker_CardGame
-from gui_env.robust_parallel_desktop_env import ParallelDesktopEnv
+# from gui_env.robust_parallel_desktop_env import ParallelDesktopEnv
 from openrlhf.textgrad.custom_reward_functions import check_answer_commonsense_qa, check_answer_math
 from openrlhf.trainer.ppo_utils.replay_buffer import ReplayBuffer_CARDGAME
 
@@ -1635,7 +1635,8 @@ class ActorModelRayActor_Card(BasePPORole):
         try:
             print(f"Creating {self.num_envs} parallel environments...")
             # context="spawn" is often more robust, especially on Windows/macOS
-            self.envs = gym.vector.AsyncVectorEnv(env_fns, context="spawn", autoreset_mode=gym.vector.AutoresetMode.NEXT_STEP)
+            # self.envs = gym.vector.AsyncVectorEnv(env_fns, context="spawn", autoreset_mode=gym.vector.AutoresetMode.NEXT_STEP)
+            self.envs = gym.vector.AsyncVectorEnv(env_fns, autoreset_mode=gym.vector.AutoresetMode.NEXT_STEP)
             print("Environments created.")
         except Exception as e:
             print(f"\nAn error occurred: {e}")
@@ -2347,7 +2348,7 @@ class ActorPPOTrainer_GUI(PPOTrainer):
         vllm_engines: List = None,
         remote_rm_url: List[str] = None,
         critic_train_remote: bool = False,
-        parallel_env: ParallelDesktopEnv = None,
+        parallel_env = None,
         **kwargs,
     ):
         """PPOTrainer for ray.

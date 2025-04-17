@@ -28,3 +28,16 @@ def get_physical_gpu_id():
     device = torch.cuda.current_device()
     props = torch.cuda.get_device_properties(device)
     return str(props.uuid)
+
+
+def get_bundle_indices(placement_group, index, length):
+    import ray
+
+    pg_infos = ray.util.placement_group_table(placement_group)
+
+    node_id_to_bundles = {}
+    for bundle, node_id in pg_infos["bundles_to_node_id"].items():
+        node_id_to_bundles.setdefault(node_id, []).append(bundle)
+
+    sorted_bundle_indices = sum(node_id_to_bundles.values(), [])
+    return sorted_bundle_indices[index * length : (index + 1) * length]

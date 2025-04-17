@@ -10,7 +10,7 @@ from vllm import LLM
 
 from openrlhf.utils.logging_utils import init_logger
 
-from .utils import ray_noset_visible_devices
+from .utils import ray_noset_visible_devices, get_bundle_indices
 
 logger = init_logger(__name__)
 
@@ -190,6 +190,82 @@ def create_vllm_engines(
         batch_vllm_engine_call(vllm_engines, "sleep", rank_0_only=False)
 
     return vllm_engines
+
+
+
+# def create_vllm_engines(
+#     num_engines: int,
+#     tensor_parallel_size: int,
+#     pretrain: str,
+#     seed: int,
+#     full_determinism: bool,
+#     enable_prefix_caching: bool,
+#     enforce_eager: bool,
+#     max_model_len: int,
+#     shared_pg=None,
+#     gpu_memory_utilization=None,
+#     vllm_enable_sleep=False,
+# ):
+#     import vllm
+
+#     assert vllm.__version__ >= "0.8.1", "OpenRLHF only supports vllm >= 0.8.1"
+
+#     vllm_engines = []
+#     noset_visible_devices = ray_noset_visible_devices(ray.get(get_all_env_variables.remote()))
+#     distributed_executor_backend = "uni" if tensor_parallel_size == 1 else "ray"
+#     use_hybrid_engine = shared_pg is not None
+#     num_gpus = int(tensor_parallel_size == 1)
+#     if use_hybrid_engine and tensor_parallel_size == 1:
+#         # every worker will use 0.2 GPU, so that we can schedule
+#         # 2 instances on the same GPUs.
+#         num_gpus = 0.2
+
+#     if not use_hybrid_engine:
+#         # Create a big placement group to ensure that all engines are packed
+#         bundles = [{"GPU": 1, "CPU": 1} for _ in range(num_engines * tensor_parallel_size)]
+#         shared_pg = placement_group(bundles, strategy="PACK")
+#         ray.get(shared_pg.ready())
+
+#     for i in range(num_engines):
+#         bundle_indices = None
+#         if tensor_parallel_size > 1:
+#             bundle_indices = get_bundle_indices(shared_pg, i, tensor_parallel_size)
+
+#         scheduling_strategy = PlacementGroupSchedulingStrategy(
+#             placement_group=shared_pg,
+#             placement_group_capture_child_tasks=True,
+#             placement_group_bundle_index=bundle_indices[0] if bundle_indices else i,
+#         )
+
+#         vllm_engines.append(
+#             LLMRayActor.options(
+#                 num_cpus=num_gpus,
+#                 num_gpus=num_gpus,
+#                 scheduling_strategy=scheduling_strategy,
+#             ).remote(
+#                 model=pretrain,
+#                 enforce_eager=enforce_eager,
+#                 worker_extension_cls="openrlhf.trainer.ray.vllm_worker_wrap.WorkerWrap",
+#                 tensor_parallel_size=tensor_parallel_size,
+#                 seed=seed + i,
+#                 distributed_executor_backend=distributed_executor_backend,
+#                 max_model_len=max_model_len,
+#                 enable_prefix_caching=enable_prefix_caching,
+#                 dtype="bfloat16",
+#                 trust_remote_code=True,
+#                 full_determinism=full_determinism,
+#                 gpu_memory_utilization=gpu_memory_utilization,
+#                 bundle_indices=bundle_indices,
+#                 num_gpus=0.2 if use_hybrid_engine else 1,
+#                 enable_sleep_mode=vllm_enable_sleep,
+#                 noset_visible_devices=noset_visible_devices,
+#             )
+#         )
+
+#     if vllm_enable_sleep:
+#         batch_vllm_engine_call(vllm_engines, "sleep", rank_0_only=False)
+
+#     return vllm_engines
 
 
 def batch_vllm_engine_call(engines: List[Any], method_name: str, *args, rank_0_only: bool = True, **kwargs):

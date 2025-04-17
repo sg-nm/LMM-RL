@@ -30,8 +30,8 @@ from openrlhf.utils.remote_rm_utils import remote_rm_fn_ray
 
 from qwen_vl_utils import process_vision_info
 
-from gui_env.robust_parallel_desktop_env import ParallelDesktopEnv
-from agents.ui_tars import build_singleturn_prompt, parse_action_qwen2vl, parsing_response_to_pyautogui_code
+# from gui_env.robust_parallel_desktop_env import ParallelDesktopEnv
+# from agents.ui_tars import build_singleturn_prompt, parse_action_qwen2vl, parsing_response_to_pyautogui_code
 from openrlhf.trainer.ppo_utils.rewards import gui_agent_format_reward, english_format_reward
 from openrlhf.textgrad.feedback_vllm import FEEDBACK_PROMPT, FEEDBACK_PROMPT_BASE, PROMPT_BASE, FEEDBACK_PROMPT_MATH, FEEDBACK_PROMPT_BASE_MATH, PROMPT_BASE_MATH
 from openrlhf.textgrad.custom_reward_functions import check_answer_commonsense_qa, check_answer_math
@@ -2370,7 +2370,7 @@ class RemoteExperienceMaker_TG(NaiveExperienceMaker):
 
 
 class RemoteExperienceMaker_GUI(NaiveExperienceMaker):
-    def __init__(self, *args, vllm_engines: List = None, packing_samples=False, parallel_env: ParallelDesktopEnv = None, **kwargs):
+    def __init__(self, *args, vllm_engines: List = None, packing_samples=False, parallel_env = None, **kwargs):
         super().__init__(*args, **kwargs)
         assert parallel_env is not None
         self.vllm_engines = vllm_engines
