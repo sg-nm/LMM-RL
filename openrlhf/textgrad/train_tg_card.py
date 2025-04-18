@@ -104,12 +104,12 @@ def train(args):
     feedback_vllm_engines = None
     if args.feedback_vllm_num_engines is not None and args.feedback_vllm_num_engines > 0:
         max_len = args.max_len if args.max_len else args.prompt_max_len + args.generate_max_len
-        if args.colocate_all_models:
-            assert (args.actor_num_nodes * args.actor_num_gpus_per_node == args.feedback_vllm_num_engines * args.feedback_vllm_tensor_parallel_size), (
-                f"actor_num_nodes * actor_num_gpus_per_node must be equal to "
-                f"feedback_vllm_num_engines * feedback_vllm_tensor_parallel_size, got {args.actor_num_nodes * args.actor_num_gpus_per_node} "
-                f"and {args.feedback_vllm_num_engines * args.feedback_vllm_tensor_parallel_size}"
-            )
+        # if args.colocate_all_models:
+        #     assert (args.actor_num_nodes * args.actor_num_gpus_per_node == args.feedback_vllm_num_engines * args.feedback_vllm_tensor_parallel_size), (
+        #         f"actor_num_nodes * actor_num_gpus_per_node must be equal to "
+        #         f"feedback_vllm_num_engines * feedback_vllm_tensor_parallel_size, got {args.actor_num_nodes * args.actor_num_gpus_per_node} "
+        #         f"and {args.feedback_vllm_num_engines * args.feedback_vllm_tensor_parallel_size}"
+        #     )
 
         feedback_vllm_engines = create_vllm_engines(
             args.feedback_vllm_num_engines,

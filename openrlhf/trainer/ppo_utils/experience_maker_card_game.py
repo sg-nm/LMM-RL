@@ -211,10 +211,9 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         
         self.target_number = self.env_config.target_points
         self.formulate_oracle_arguments()
-
         self.custom_reward_func = None
-
         self.processor = data_processor
+        self.history_length = 2
 
 
     def formulate_oracle_arguments(self):
@@ -237,10 +236,10 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         for i in range(self.num_envs):
             contents = []
             contents_no_feedback = []
-            if not (all(len(feedback) == 0 for feedback in previous_feedbacks) or
-                all(len(response) == 0 for response in previous_responses) or
-                all(len(verify) == 0 for verify in previous_verify_infos)):
-            # if previous_responses[i] is not None and previous_verify_infos[i] is not None and previous_feedbacks[i] is not None:
+            # if not (all(len(feedback) == 0 for feedback in previous_feedbacks) or
+            #     all(len(response) == 0 for response in previous_responses) or
+            #     all(len(verify) == 0 for verify in previous_verify_infos)):
+            if len(previous_feedbacks[i]) > 0 and len(previous_responses[i]) > 0 and len(previous_verify_infos[i]) > 0:
                 assert len(previous_responses[i]) == len(previous_feedbacks[i]) == len(previous_verify_infos[i]), "The number of previous responses, feedbacks, and verify infos must be the same."
                 if obs_batch[i] is not None:
                     pil_image = Image.fromarray(obs_batch[i])
@@ -249,11 +248,12 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
                 base_prompt = FEEDBACK_PROMPT_BASE_CARD.format(task=task_prompt)
                 contents.append({"type": "text", "text": base_prompt})
                 contents_no_feedback.append({"type": "text", "text": task_prompt})
-                for idx, (prev_response, prev_feedback, prev_verify_info) in enumerate(zip(previous_responses[i], previous_feedbacks[i], previous_verify_infos[i])):
-                    contents.append({"type": "text", "text": f"\n## Previous your response ({len(previous_responses[i]) - idx} steps ago):\n{prev_response}"})
+                for idx, (prev_response, prev_feedback, prev_verify_info) in enumerate(zip(previous_responses[i][-self.history_length:], previous_feedbacks[i][-self.history_length:], previous_verify_infos[i][-self.history_length:])):
+                    contents.append({"type": "text", "text": f"\n## Previous your response ({self.history_length - idx} steps ago):\n{prev_response}"})
                     contents.append({"type": "text", "text": f"\n## Verification\nYou failed this trial because {prev_verify_info}"})
-                    contents.append({"type": "text", "text": f"\n## Feedback ({len(previous_responses[i]) - idx} steps ago):\n{prev_feedback}"})
-                    contents_no_feedback.append({"type": "text", "text": f"You failed this trial because {prev_verify_info}"})
+                    contents.append({"type": "text", "text": f"\n## Feedback ({self.history_length - idx} steps ago):\n{prev_feedback}"})
+                    contents_no_feedback.append({"type": "text", "text": f"\n## Previous your response ({self.history_length - idx} steps ago):\n{prev_response}"})
+                    contents_no_feedback.append({"type": "text", "text": f"\nYou failed this trial because {prev_verify_info}"})
             else:
                 if obs_batch[i] is not None:
                     pil_image = Image.fromarray(obs_batch[i])
@@ -291,15 +291,15 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             if (len(previous_responses[i]) == len(previous_verify_infos[i]) == len(previous_feedbacks[i])):
             # if previous_responses[i] is not None and previous_verify_infos[i] is not None and previous_feedbacks[i] is not None:
                 assert len(previous_responses[i]) == len(previous_feedbacks[i]) == len(previous_verify_infos[i]), "The number of previous responses, feedbacks, and verify infos must be the same."
-                for idx, (prev_response, prev_feedback, prev_verify_info) in enumerate(zip(previous_responses[i], previous_feedbacks[i], previous_verify_infos[i])):
-                    contents.append({"type": "text", "text": f"\n## Previous model's answer ({len(previous_responses[i]) - idx} steps ago):\n{prev_response}"})
+                for idx, (prev_response, prev_feedback, prev_verify_info) in enumerate(zip(previous_responses[i][-self.history_length:], previous_feedbacks[i][-self.history_length:], previous_verify_infos[i][-self.history_length:])):
+                    contents.append({"type": "text", "text": f"\n## Previous model's answer ({self.history_length - idx} steps ago):\n{prev_response}"})
                     contents.append({"type": "text", "text": f"\n## Verification message\nYou failed this trial because {prev_verify_info}"})
-                    contents.append({"type": "text", "text": f"\n## Your previous feedback ({len(previous_responses[i]) - idx} steps ago):\n{prev_feedback}"})
+                    contents.append({"type": "text", "text": f"\n## Your previous feedback ({self.history_length - idx} steps ago):\n{prev_feedback}"})
             
             elif (len(previous_responses[i]) == len(previous_verify_infos[i])):
             # elif previous_responses[i] is not None and previous_verify_infos[i] is not None:
-                for idx, (prev_response, prev_verify_info) in enumerate(zip(previous_responses[i], previous_verify_infos[i])):
-                    contents.append({"type": "text", "text": f"\n## Previous model's answer ({len(previous_responses[i]) - idx} steps ago):\n{prev_response}"})
+                for idx, (prev_response, prev_verify_info) in enumerate(zip(previous_responses[i][-self.history_length:], previous_verify_infos[i][-self.history_length:])):
+                    contents.append({"type": "text", "text": f"\n## Previous model's answer ({self.history_length - idx} steps ago):\n{prev_response}"})
                     contents.append({"type": "text", "text": f"\n## Verification message\nYou failed this trial because {prev_verify_info}"})
             else:
                 raise ValueError("The number of previous responses, feedbacks, and verify infos must be the same.")
@@ -364,7 +364,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         replay_buffer = deque(maxlen=self.env_config.num_steps + 1)
         episode_start = np.zeros(self.num_envs, dtype=bool)
 
-        for step in tqdm(range(self.env_config.num_steps + 1), desc="Collecting trajectories"):
+        for step in tqdm(range(self.env_config.num_steps), desc="Collecting trajectories"):
             vision_res_list = [{} for _ in range(self.num_envs)]
             language_res_list = [{} for _ in range(self.num_envs)]
             self.formulate_vision_arguments(vision_res_list, info_batch)
@@ -501,6 +501,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         if self.strategy.args.vllm_enable_sleep:
             from openrlhf.trainer.ray.vllm_engine import batch_vllm_engine_call
             batch_vllm_engine_call(self.vllm_engines, "wake_up")
+            batch_vllm_engine_call(self.feedback_model, "wake_up")
             torch.distributed.barrier()
             torch.cuda.synchronize()
 
@@ -508,6 +509,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
 
         if self.strategy.args.vllm_enable_sleep:
             batch_vllm_engine_call(self.vllm_engines, "sleep")
+            batch_vllm_engine_call(self.feedback_model, "sleep")
         torch.cuda.empty_cache()
         torch.distributed.barrier()
         torch.cuda.synchronize()
@@ -525,23 +527,6 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             all_experiences.append(experience)
 
         return all_experiences
-
-    @torch.no_grad()
-    def generate_samples(self, all_prompts: List[str], all_labels, **generate_kwargs) -> List[Samples]:
-        """
-        Generate samples and return in batches.
-
-        When not using vllm, we will fallback to the default implementation,
-        in which actor will be used to generate samples.
-        """
-        if self.vllm_engines is None:
-            return super().generate_samples(all_prompts, all_labels, **generate_kwargs)
-
-        # vLLM generation
-        vllm_outputs_list = self._generate_vllm(all_prompts, all_labels, multimodal=self.multimodal, 
-                                                n_samples_per_prompt=self.strategy.args.n_samples_per_prompt, 
-                                                pack_size=self.strategy.args.micro_rollout_batch_size, **generate_kwargs)
-        return vllm_outputs_list
 
     @torch.no_grad()
     def make_experience(self, mini_batch: RolloutStorage) -> Experience_CARDGAME:
@@ -588,6 +573,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         else:
             base_action_log_probs_ref = ray.put([None])
 
+        
         actor_visual_inputs = None if visual_inputs is None else {k: v.to(device) for k, v in visual_inputs.items() if k != "input_ids" and k != "attention_mask"}
         # Batch call actor model
         action_log_probs = self.actor(

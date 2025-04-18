@@ -1575,7 +1575,16 @@ class ActorModelRayActor_Card(BasePPORole):
         self.prepare_env()
 
         # configure scheduler
-        self.num_update_steps_per_episodes = (self.num_steps // args.train_batch_size * args.max_epochs)
+        self.num_update_steps_per_episodes = (self.num_steps * self.num_envs * args.max_epochs // args.train_batch_size)
+        # num_rollouts_per_episodes = (
+        #     self.num_update_steps_per_episodes
+        #     * args.train_batch_size
+        #     // args.max_epochs
+        #     // args.rollout_batch_size
+        #     // args.n_samples_per_prompt
+        # )
+        # assert num_rollouts_per_episodes != 0, f"num_rollouts_per_episodes is 0. {args.train_batch_size}, {args.max_epochs}, {args.rollout_batch_size}, {args.n_samples_per_prompt}"
+
         max_steps = math.ceil(args.num_episodes * self.num_update_steps_per_episodes)
         self._max_steps = max_steps
 

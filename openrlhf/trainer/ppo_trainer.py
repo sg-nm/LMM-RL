@@ -206,16 +206,17 @@ class PPOTrainer(ABC):
         consumed_samples=0,
         num_update_steps_per_episodes=1,
     ) -> None:
-        num_rollouts_per_episodes = (
-            num_update_steps_per_episodes * args.train_batch_size
-            // args.max_epochs
-            // args.rollout_batch_size
-            // args.n_samples_per_prompt
-        )
+        
+        # num_rollouts_per_episodes = (
+        #     num_update_steps_per_episodes * args.train_batch_size
+        #     // args.max_epochs
+        #     // args.rollout_batch_size
+        #     // args.n_samples_per_prompt
+        # )
 
         # get eval and save steps
         if args.eval_steps == -1:
-            args.eval_steps = num_rollouts_per_episodes  # Evaluate once per epoch
+            args.eval_steps = 1  # Evaluate once per epoch
         if args.save_steps == -1:
             args.save_steps = float("inf")  # do not save ckpt
 
@@ -223,10 +224,13 @@ class PPOTrainer(ABC):
         self.pretrain_dataloader = pretrain_dataloader
         self.prompts_dataloader_eval = prompts_dataloader_eval
 
-        # Restore step and start_epoch
-        steps = consumed_samples // args.rollout_batch_size + 1
-        start_episode = consumed_samples // args.rollout_batch_size // num_rollouts_per_episodes
-        consumed_samples = consumed_samples % (num_rollouts_per_episodes * args.rollout_batch_size)
+        # # Restore step and start_epoch
+        # steps = consumed_samples // args.rollout_batch_size + 1
+        # start_episode = consumed_samples // args.rollout_batch_size // num_rollouts_per_episodes
+        # consumed_samples = consumed_samples % (num_rollouts_per_episodes * args.rollout_batch_size)
+        steps = 0
+        start_episode = 0
+        consumed_samples = 0
 
         for episode in range(start_episode, args.num_episodes):
             if self.prompts_dataloader is not None:
