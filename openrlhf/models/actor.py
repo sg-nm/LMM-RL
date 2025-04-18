@@ -515,7 +515,7 @@ class MultiModalActor(nn.Module):
     def forward(
         self,
         sequences: torch.LongTensor,
-        num_actions: Optional[Union[int, list[int]]] = None,
+        action_mask: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         return_output=False,
         ring_attn_group: Optional[dist.ProcessGroup] = None,
@@ -559,15 +559,14 @@ class MultiModalActor(nn.Module):
         # https://github.com/OpenRLHF/OpenRLHF/pull/634
         output["logits"] = output["logits"].to(torch.float32)
 
-        if num_actions is None:
+        return_action_log_probs = action_mask is not None
+        if not return_action_log_probs and return_output:
             assert return_output
             return output
 
         if not self.packing_samples:
-            log_probs = log_probs_from_logits(
-                output["logits"][:, :-1, :], sequences[:, 1:], temperature=self.temperature
-            )
-            action_log_probs = log_probs[:, -num_actions:]
+            log_probs = log_probs_from_logits(output["logits"][:, :-1, :], sequences[:, 1:], temperature=self.temperature)
+            action_log_probs = log_probs[:, -action_mask.shape[1]:]
         else:
             if ring_attn_group is not None and logps_allgather:
                 rank = dist.get_rank(ring_attn_group)

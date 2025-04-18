@@ -10,6 +10,9 @@ from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+import deepspeed
+import ray
+
 from openrlhf.models import Actor, GPTLMLoss, PolicyLoss, ValueLoss
 from openrlhf.models.ring_attn_utils import pad_sequences, unpad_sequences
 from openrlhf.models.utils import compute_approx_kl, masked_mean, unpacking_samples
@@ -265,20 +268,20 @@ class PPOTrainer(ABC):
                         self.strategy.print(output)
                     self.replay_buffer.append(experience)
 
-                    if self.args.advantage_estimator != "group_norm" and self.args.advantage_estimator != "uniform":
-                        self.replay_buffer.normalize("advantages", self.strategy)
-                    status = self.ppo_train(steps)
-                    self.replay_buffer.clear()
+                if self.args.advantage_estimator != "group_norm" and self.args.advantage_estimator != "uniform":
+                    self.replay_buffer.normalize("advantages", self.strategy)
+                status = self.ppo_train(steps)
+                self.replay_buffer.clear()
 
-                    if "kl" in status:
-                        self.kl_ctl.update(status["kl"], args.rollout_batch_size * args.n_samples_per_prompt)
-                    # pbar.set_postfix(status)
+                if "kl" in status:
+                    self.kl_ctl.update(status["kl"], args.rollout_batch_size * args.n_samples_per_prompt)
+                # pbar.set_postfix(status)
 
-                    # logs/checkpoints
-                    client_states = {"consumed_samples": steps * args.rollout_batch_size}
-                    self.save_logs_and_checkpoints(args, steps, None, status, client_states)
-                    # pbar.update()
-                    steps = steps + 1
+                # logs/checkpoints
+                client_states = {"consumed_samples": steps * args.rollout_batch_size}
+                self.save_logs_and_checkpoints(args, steps, None, status, client_states)
+                # pbar.update()
+                steps = steps + 1
 
 
         if self._wandb is not None and self.strategy.is_rank_0():
@@ -311,6 +314,22 @@ class PPOTrainer(ABC):
                 experience.to_device(device)
                 status = self.training_step(experience, global_steps)
 
+
+                # engine = self.actor.model  # your DeepSpeedEngine
+                # if engine.is_gradient_accumulation_boundary():
+                #     # offload/cache cleanup if you like…
+                #     if self.strategy.args.deepspeed_enable_sleep:
+                #         self.offload_states()
+                #     torch.cuda.empty_cache()
+
+                #     if self.vllm_engines is not None:
+                #         if self.strategy.args.vllm_enable_sleep:
+                #             self.batch_vllm_engine_call(self.vllm_engines, "wake_up")
+                #         torch.distributed.barrier()
+                #         torch.cuda.synchronize()
+                #         self._broadcast_to_vllm()   # <— now only once per full step
+
+                
                 # for DP
                 # weighted mean for kl
                 if "kl" in status:
@@ -352,6 +371,65 @@ class PPOTrainer(ABC):
         torch.cuda.empty_cache()
         return status_mean
 
+    
+    def batch_vllm_engine_call(self, engines: List[Any], method_name: str, *args, rank_0_only: bool = True, **kwargs):
+        """
+        Batch call a method on multiple vLLM engines.
+        Args:
+            engines: List of vLLM engine instances
+            method_name: Name of the method to call
+            rank_0_only: Only execute on rank 0 if True
+            *args: Positional arguments to pass to the method
+            **kwargs: Keyword arguments to pass to the method
+        Returns:
+            List of results from ray.get() if on rank 0, None otherwise
+        """
+        import torch
+
+        if rank_0_only and torch.distributed.get_rank() != 0:
+            return None
+
+        refs = []
+        for engine in engines:
+            method = getattr(engine, method_name)
+            refs.append(method.remote(*args, **kwargs))
+
+        return ray.get(refs)
+    
+    # def _broadcast_to_vllm(self):
+    #     """
+    #     Consolidate every ZeRO‑3 shard into full FP16 tensors,
+    #     build a CPU state_dict, and push it to all vLLM actors.
+    #     """
+    #     ds_engine: deepspeed.DeepSpeedEngine = self.actor.model
+
+    #     # 1) Manually build a full fp16 state dict on rank 0
+    #     full_sd = {}
+    #     if torch.distributed.get_rank() == 0:
+    #         # `ds_engine.module` is your original nn.Module
+    #         for name, param in ds_engine.module.named_parameters():
+    #             if hasattr(param, "ds_id"):
+    #                 # gather this shard → get full tensor → re‑shard on exit
+    #                 with deepspeed.zero.GatheredParameters([param], enabled=True):
+    #                     full_sd[name] = param.data.clone().cpu()
+    #             else:
+    #                 full_sd[name] = param.data.clone().cpu()
+
+    #     # 2) Broadcast the dict to every vLLM actor
+    #     if torch.distributed.get_rank() == 0:
+    #         # one RPC per actor, loading all weights in one shot
+    #         refs = [
+    #             vllm_engine.load_state_dict.remote(full_sd, strict=False)
+    #             for vllm_engine in self.vllm_engines
+    #         ]
+    #         ray.get(refs)
+
+    #     # 3) Barrier so that every rank waits until the load is done
+    #     torch.distributed.barrier()
+    #     torch.cuda.synchronize()
+
+
+    
     def training_step(self, experience: Experience, global_steps) -> Dict[str, float]:
         status = {}
         if global_steps > self.freezing_actor_steps:
@@ -369,6 +447,7 @@ class PPOTrainer(ABC):
             sequences = torch.cat(experience.sequences, dim=0).unsqueeze(0)
             old_action_log_probs = torch.cat(experience.action_log_probs, dim=0).unsqueeze(0)
             advantages = torch.cat(experience.advantages, dim=0).unsqueeze(0)
+            action_mask = torch.cat(experience.action_mask, dim=0).unsqueeze(0)
             num_actions = [v.numel() for v in experience.advantages]
             packed_seq_lens = [s.numel() for s in experience.sequences]
             attention_mask = torch.cat(
@@ -386,6 +465,7 @@ class PPOTrainer(ABC):
             sequences = experience.sequences
             old_action_log_probs = experience.action_log_probs
             advantages = experience.advantages
+            action_mask = experience.action_mask
             num_actions = experience.action_mask.size(1)
             packed_seq_lens = None
             attention_mask = experience.attention_mask
@@ -397,7 +477,7 @@ class PPOTrainer(ABC):
         if self.args.multimodal:
             action_log_probs, output = self.actor(
                 sequences,
-                num_actions,
+                action_mask=action_mask,
                 attention_mask=attention_mask,
                 return_output=True,
                 ring_attn_group=self.strategy.ring_attn_group,
@@ -408,7 +488,7 @@ class PPOTrainer(ABC):
         else:
             action_log_probs, output = self.actor(
                 sequences,
-                num_actions,
+                action_mask=action_mask,
                 attention_mask=attention_mask,
                 return_output=True,
                 ring_attn_group=self.strategy.ring_attn_group,
@@ -622,11 +702,12 @@ class PPOTrainer(ABC):
         if global_step % args.eval_steps == 0:
             # self.evaluate(self.eval_dataloader, global_step)
             pass
-        # save ckpt
-        # TODO: save best model on dev, use loss/perplexity/others on whole dev dataset as metric
-        if global_step % args.save_steps == 0:
-            tag = f"global_step{global_step}"
-            self._save_checkpoint(args, tag, client_states)
+        
+        # # save ckpt
+        # # TODO: save best model on dev, use loss/perplexity/others on whole dev dataset as metric
+        # if global_step % args.save_steps == 0:
+        #     tag = f"global_step{global_step}"
+        #     self._save_checkpoint(args, tag, client_states)
 
     def _save_checkpoint(self, args, tag, client_states):
         raise NotImplementedError("This method should be implemented by the subclass.")

@@ -108,6 +108,21 @@ class LLMRayActor:
         Return the responses for the actor with the given rank
         """
         return self.response_queues[actor_rank].get()
+    
+    
+    def load_state_dict(self, state_dict: dict, strict: bool = False):
+        """
+        Load a full HuggingFace state_dict into the vLLM engine in one shot.
+        """
+        # `apply_model` will call the given function on the underlying nn.Module
+        # inside each device / partition.  We ignore its return value here.
+        def _load_fn(module):
+            module.load_state_dict(state_dict, strict=strict)
+            return True
+
+        # this runs _load_fn(module) for you, no need to dig into llm_engine internals
+        self.llm.apply_model(_load_fn)
+        return True
 
 
 def create_vllm_engines(

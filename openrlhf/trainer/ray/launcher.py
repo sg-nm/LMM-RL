@@ -2,7 +2,7 @@ import logging
 import time
 import os
 import socket
-from typing import Callable, Dict, List, Optional, Type, Any
+from typing import Callable, Dict, List, Optional, Type, Any, Union
 from tqdm import tqdm
 
 import ray
@@ -134,7 +134,7 @@ class ReferenceModelRayActor(BasePPORole):
     def forward(
         self,
         sequences: torch.LongTensor,
-        num_actions: int = None,
+        num_actions: Optional[Union[int, list[int]]] = None,
         attention_mask: Optional[torch.Tensor] = None,
         return_output=False,
         logps_allgather=False,
@@ -164,6 +164,62 @@ class ReferenceModelRayActor(BasePPORole):
                 ring_attn_group=self.strategy.ring_attn_group,
                 logps_allgather=logps_allgather,
                 packed_seq_lens=packed_seq_lens,
+            )
+
+        return log_probs.to("cpu")
+
+    def empty_cache(self) -> None:
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
+
+
+@ray.remote(num_gpus=1)
+class ReferenceModelRayActor_multimodal(BasePPORole):
+    def init_model_from_pretrained(self, strategy: DeepspeedStrategy, pretrain):
+        self._setup_distributed(strategy)
+        self.multimodal = strategy.args.multimodal
+        assert self.multimodal, "ReferenceModelRayActor_multimodal is only used for multimodal models"
+        model = MultiModalActor(
+            pretrain,
+            use_flash_attention_2=strategy.args.flash_attn,
+            bf16=strategy.args.bf16,
+            load_in_4bit=strategy.args.load_in_4bit,
+            ds_config=strategy.get_ds_eval_config(offload=strategy.args.ref_reward_offload),
+            packing_samples=strategy.args.packing_samples,
+            temperature=strategy.args.temperature,
+            use_liger_kernel=strategy.args.use_liger_kernel,
+        )
+
+        # strategy.print(model)
+
+        if strategy.args.ref_reward_offload:
+            model._offload = True
+
+        self.model = self.strategy.prepare(model, is_rlhf=True)
+        self.model.eval()
+
+    def forward(
+        self,
+        sequences: torch.LongTensor,
+        action_mask: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        return_output=False,
+        logps_allgather=False,
+        packed_seq_lens: Optional[list[int]] = None,
+        visual_inputs: Optional[dict] = None,
+    ) -> torch.Tensor:
+        device = torch.cuda.current_device()
+        with torch.no_grad():
+            visual_inputs = {k:v.to(device) for k,v in visual_inputs.items()}
+            log_probs = self.model(
+                sequences.to(device),
+                action_mask.to(device),
+                attention_mask.to(device),
+                return_output=return_output,
+                ring_attn_group=self.strategy.ring_attn_group,
+                logps_allgather=logps_allgather,
+                packed_seq_lens=packed_seq_lens,
+                visual_inputs=visual_inputs,
             )
 
         return log_probs.to("cpu")

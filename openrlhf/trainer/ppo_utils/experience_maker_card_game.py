@@ -55,7 +55,7 @@ class RolloutStorage:
     output_text: list[str]
     sequences: torch.Tensor
     attention_mask: Optional[torch.LongTensor]
-    action_mask: Optional[torch.BoolTensor]
+    action_mask: Optional[torch.Tensor]
     num_actions: Union[int, torch.Tensor]
     packed_seq_lens: Optional[torch.Tensor]
     response_length: torch.Tensor
@@ -528,6 +528,15 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
 
         return all_experiences
 
+    def split_into_chunks(self, data, chunk_size):
+        """Split data into chunks of specified size."""
+        if isinstance(data, torch.Tensor):
+            return torch.split(data, chunk_size)
+        elif isinstance(data, dict):
+            return [{k: v[i:i+chunk_size] for k, v in data.items()} for i in range(0, len(next(iter(data.values()))), chunk_size)]
+        else:
+            return [data[i:i+chunk_size] for i in range(0, len(data), chunk_size)]
+
     @torch.no_grad()
     def make_experience(self, mini_batch: RolloutStorage) -> Experience_CARDGAME:
         """
@@ -543,52 +552,110 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         self.actor.eval()
         device = torch.cuda.current_device()
 
-        # extract values from samples
-        output_text = mini_batch.output_text
+        # # extract values from samples
+        # sequences = mini_batch.sequences
+        # attention_mask = mini_batch.attention_mask
+        # num_actions = mini_batch.num_actions
+        # packed_seq_lens = mini_batch.packed_seq_lens
+        # visual_inputs = self.make_input_batch(mini_batch.visual_inputs) # list[Dict] -> Dict.
+
+        # # Move data to CPU for remote processing
+        # sequences_cpu = sequences.to("cpu")
+        # attention_mask_cpu = attention_mask.to("cpu")
+        # visual_inputs_cpu = {k: v.to("cpu") for k, v in visual_inputs.items() if k != "input_ids" and k != "attention_mask"}
+
+        
+        chunk_size = self.strategy.args.micro_train_batch_size
+
+        # Extract values from samples
         sequences = mini_batch.sequences
         attention_mask = mini_batch.attention_mask
-        num_actions = mini_batch.num_actions
+        action_mask = mini_batch.action_mask
         packed_seq_lens = mini_batch.packed_seq_lens
-        visual_inputs = self.make_input_batch(mini_batch.visual_inputs) # list[Dict] -> Dict.
-        
-        # Move data to CPU for remote processing
-        sequences_cpu = sequences.to("cpu")
-        attention_mask_cpu = attention_mask.to("cpu")
-        visual_inputs_cpu = {k: v.to("cpu") for k, v in visual_inputs.items() if k != "input_ids" and k != "attention_mask"}
+        visual_inputs = self.make_input_batch(mini_batch.visual_inputs)
 
-        # Batch call initial model
-        if self.initial_model is not None:
-            base_action_log_probs_ref = self.initial_model.forward.remote(
-                sequences=sequences_cpu,
-                num_actions=num_actions,
-                attention_mask=attention_mask_cpu,
+        # Split data into chunks
+        sequences_chunks = self.split_into_chunks(sequences, chunk_size)
+        attention_mask_chunks = self.split_into_chunks(attention_mask, chunk_size)
+        action_mask_chunks = self.split_into_chunks(action_mask, chunk_size)
+        packed_seq_lens_chunks = self.split_into_chunks(packed_seq_lens, chunk_size) if packed_seq_lens is not None else [None] * len(sequences_chunks)
+        visual_inputs_chunks = [self.make_input_batch(mini_batch.visual_inputs[i:i+chunk_size]) for i in range(0, len(mini_batch.visual_inputs), chunk_size)]
+
+        # Initialize lists to store results
+        all_action_log_probs = []
+        all_base_action_log_probs = []
+
+        # Process each chunk
+        for i in range(len(sequences_chunks)):
+            # Clear GPU cache before processing new chunk
+            torch.cuda.empty_cache()
+
+            # Get current chunk
+            seq_chunk = sequences_chunks[i]
+            attn_chunk = attention_mask_chunks[i]
+            action_mask_chunk = action_mask_chunks[i]
+            packed_seq_chunk = packed_seq_lens_chunks[i]
+            vis_inputs_chunk = visual_inputs_chunks[i]
+
+            # Move current chunk to CPU for remote processing
+            seq_chunk_cpu = seq_chunk.to("cpu")
+            attn_chunk_cpu = attn_chunk.to("cpu")
+            vis_inputs_chunk_cpu = {k: v.to("cpu") for k, v in vis_inputs_chunk.items() if k != "input_ids" and k != "attention_mask"}
+
+            # Process initial model chunk
+            if self.initial_model is not None:
+                base_action_log_probs_ref = self.initial_model.forward.remote(
+                    sequences=seq_chunk_cpu,
+                    action_mask=action_mask_chunk,
+                    attention_mask=attn_chunk_cpu,
+                    logps_allgather=True,
+                    packed_seq_lens=packed_seq_chunk,
+                    visual_inputs=vis_inputs_chunk_cpu,
+                )
+
+                if args.colocate_actor_ref or args.colocate_all_models:
+                    ray.get([base_action_log_probs_ref])
+                    ray.get([self.initial_model.empty_cache.remote()])
+            else:
+                base_action_log_probs_ref = ray.put([None])
+
+            # Process actor model chunk
+            actor_vis_inputs = None if vis_inputs_chunk is None else {k: v.to(device) for k, v in vis_inputs_chunk.items() if k != "input_ids" and k != "attention_mask"}
+            
+            action_log_probs_chunk = self.actor(
+                seq_chunk.to(device),
+                action_mask_chunk,
+                attn_chunk.to(device),
+                ring_attn_group=self.strategy.ring_attn_group,
                 logps_allgather=True,
-                packed_seq_lens=packed_seq_lens,
-                visual_inputs=visual_inputs_cpu,
+                packed_seq_lens=packed_seq_chunk,
+                visual_inputs=actor_vis_inputs,
             )
 
-            if args.colocate_actor_ref or args.colocate_all_models:
-                ray.get([base_action_log_probs_ref])
-                ray.get([self.initial_model.empty_cache.remote()])
-        else:
-            base_action_log_probs_ref = ray.put([None])
+            # Get base action log probs and clear memory
+            base_action_log_probs_chunk = ray.get([base_action_log_probs_ref])[0]
+            if base_action_log_probs_chunk is not None:
+                base_action_log_probs_chunk = base_action_log_probs_chunk.to(device)
 
-        
-        actor_visual_inputs = None if visual_inputs is None else {k: v.to(device) for k, v in visual_inputs.items() if k != "input_ids" and k != "attention_mask"}
-        # Batch call actor model
-        action_log_probs = self.actor(
-            sequences.to(device),
-            num_actions,
-            attention_mask.to(device),
-            ring_attn_group=self.strategy.ring_attn_group,
-            logps_allgather=True,
-            packed_seq_lens=packed_seq_lens,
-            visual_inputs=actor_visual_inputs,
-        )
+            # Store results
+            all_action_log_probs.append(action_log_probs_chunk)
+            all_base_action_log_probs.append(base_action_log_probs_chunk)
+
+            # Clear memory
+            del seq_chunk, attn_chunk, action_mask_chunk, packed_seq_chunk, vis_inputs_chunk
+            del seq_chunk_cpu, attn_chunk_cpu, vis_inputs_chunk_cpu
+            del action_log_probs_chunk, base_action_log_probs_chunk
+            torch.cuda.empty_cache()
+
+        # Concatenate results
+        action_log_probs = torch.cat(all_action_log_probs, dim=0)
+        if all_base_action_log_probs[0] is not None:
+            base_action_log_probs = torch.cat(all_base_action_log_probs, dim=0)
+        else:
+            base_action_log_probs = None
 
         actor_value_rm_time = time.time() - start_time
         start = time.time()
-        base_action_log_probs = ray.get([base_action_log_probs_ref])[0]
         wait_time = time.time() - start
 
         # Avoid CUDA OOM when colocate models
@@ -597,7 +664,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             torch.cuda.empty_cache()
 
         # Make experience objects
-        if base_action_log_probs[0] is not None:
+        if base_action_log_probs is not None:
             base_action_log_probs = base_action_log_probs.to(device)
 
         rewards = mini_batch.rewards

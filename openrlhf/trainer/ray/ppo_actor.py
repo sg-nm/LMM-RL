@@ -188,19 +188,19 @@ class ActorPPOTrainer(PPOTrainer):
 
             torch.cuda.empty_cache()
 
-            # 4. broadcast weights to vllm engines
-            if self.vllm_engines is not None:
-                if self.strategy.args.vllm_enable_sleep:
-                    batch_vllm_engine_call(self.vllm_engines, "wake_up")
+            # # 4. broadcast weights to vllm engines
+            # if self.vllm_engines is not None:
+            #     if self.strategy.args.vllm_enable_sleep:
+            #         batch_vllm_engine_call(self.vllm_engines, "wake_up")
 
-                torch.distributed.barrier()
-                torch.cuda.synchronize()
-                self._broadcast_to_vllm()
+            #     torch.distributed.barrier()
+            #     torch.cuda.synchronize()
+            #     self._broadcast_to_vllm()
 
-                if self.strategy.args.vllm_enable_sleep:
-                    batch_vllm_engine_call(self.vllm_engines, "sleep")
-                    torch.distributed.barrier()
-                    torch.cuda.synchronize()
+            #     if self.strategy.args.vllm_enable_sleep:
+            #         batch_vllm_engine_call(self.vllm_engines, "sleep")
+            #         torch.distributed.barrier()
+            #         torch.cuda.synchronize()
 
         # 5. wait remote critic model training done
         if self.critic_train_remote and not self.strategy.args.colocate_all_models:
@@ -1755,22 +1755,22 @@ class ActorModelRayActor_Card(BasePPORole):
             prompt_config=self.configs.prompt_config,
         )
 
-        # broadcast checkpoint
-        ckpt_path = os.path.join(args.ckpt_path, "_actor")
-        if args.load_checkpoint and os.path.exists(ckpt_path) and not vllm_engines is None:
-            # vLLM wakeup when vllm_enable_sleep
-            if self.strategy.args.vllm_enable_sleep:
-                batch_vllm_engine_call(vllm_engines, "wake_up")
-            torch.distributed.barrier()
-            torch.cuda.synchronize()
+        # # broadcast checkpoint
+        # ckpt_path = os.path.join(args.ckpt_path, "_actor")
+        # if args.load_checkpoint and os.path.exists(ckpt_path) and not vllm_engines is None:
+        #     # vLLM wakeup when vllm_enable_sleep
+        #     if self.strategy.args.vllm_enable_sleep:
+        #         batch_vllm_engine_call(vllm_engines, "wake_up")
+        #     torch.distributed.barrier()
+        #     torch.cuda.synchronize()
 
-            trainer._broadcast_to_vllm()
+        #     trainer._broadcast_to_vllm()
 
-            # vLLM offload when vllm_enable_sleep
-            if self.strategy.args.vllm_enable_sleep:
-                batch_vllm_engine_call(vllm_engines, "sleep")
-                torch.distributed.barrier()
-                torch.cuda.synchronize()
+        #     # vLLM offload when vllm_enable_sleep
+        #     if self.strategy.args.vllm_enable_sleep:
+        #         batch_vllm_engine_call(vllm_engines, "sleep")
+        #         torch.distributed.barrier()
+        #         torch.cuda.synchronize()
 
         trainer.fit(
             args,
@@ -1787,7 +1787,7 @@ class ActorModelRayActor_Card(BasePPORole):
         # save model checkpoint after fitting on only rank0
         self.strategy.save_model(
             self.ema_model if args.enable_ema else self.actor,
-            self.data_processor.processor,
+            self.tokenizer,
             args.save_path,
         )
 
@@ -2000,12 +2000,12 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
         torch.distributed.barrier()
         status = {}
 
-        # vLLM wakeup when vllm_enable_sleep
-        if self.strategy.args.vllm_enable_sleep:
-            from openrlhf.trainer.ray.vllm_engine import batch_vllm_engine_call
-            batch_vllm_engine_call(self.vllm_engines, "wake_up")
-            torch.distributed.barrier()
-            torch.cuda.synchronize()
+        # # vLLM wakeup when vllm_enable_sleep
+        # if self.strategy.args.vllm_enable_sleep:
+        #     from openrlhf.trainer.ray.vllm_engine import batch_vllm_engine_call
+        #     batch_vllm_engine_call(self.vllm_engines, "wake_up")
+        #     torch.distributed.barrier()
+        #     torch.cuda.synchronize()
 
         # if global_steps == 0 or global_steps == 1:
         #     if self.strategy.args.dataset_name == "math":
@@ -2021,12 +2021,12 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
         #         }
         #         self._wandb.log(logs)
 
-        # vLLM offload when vllm_enable_sleep
-        if self.strategy.args.vllm_enable_sleep:
-            batch_vllm_engine_call(self.vllm_engines, "sleep")
-        torch.cuda.empty_cache()
-        torch.distributed.barrier()
-        torch.cuda.synchronize()
+        # # vLLM offload when vllm_enable_sleep
+        # if self.strategy.args.vllm_enable_sleep:
+        #     batch_vllm_engine_call(self.vllm_engines, "sleep")
+        # torch.cuda.empty_cache()
+        # torch.distributed.barrier()
+        # torch.cuda.synchronize()
 
         # 2. triger remote critic model training
         if self.critic_train_remote:
@@ -2126,7 +2126,40 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
             leaf_modules = [(n,m) for n,m in leaf_modules if not any([keyword in n for keyword in lora_module_keyword])]
         return leaf_modules
 
-    def _broadcast_module(self,module,prefix=None,empty_cache=False,need_gather=False):
+    # def _broadcast_to_vllm(self):
+    #     """
+    #     Consolidate every ZeRO‑3 shard into full FP16 tensors,
+    #     build a CPU state_dict, and push it to all vLLM actors.
+    #     """
+    #     ds_engine: deepspeed.DeepSpeedEngine = self.actor.model
+
+    #     # 1) Manually build a full fp16 state dict on rank 0
+    #     full_sd = {}
+    #     if torch.distributed.get_rank() == 0:
+    #         # `ds_engine.module` is your original nn.Module
+    #         for name, param in ds_engine.module.named_parameters():
+    #             if hasattr(param, "ds_id"):
+    #                 # gather this shard → get full tensor → re‑shard on exit
+    #                 with deepspeed.zero.GatheredParameters([param], enabled=True):
+    #                     full_sd[name] = param.data.clone().cpu()
+    #             else:
+    #                 full_sd[name] = param.data.clone().cpu()
+
+    #     # 2) Broadcast the dict to every vLLM actor
+    #     if torch.distributed.get_rank() == 0:
+    #         # one RPC per actor, loading all weights in one shot
+    #         refs = [
+    #             vllm_engine.load_state_dict.remote(full_sd, strict=False)
+    #             for vllm_engine in self.vllm_engines
+    #         ]
+    #         ray.get(refs)
+
+    #     # 3) Barrier so that every rank waits until the load is done
+    #     torch.distributed.barrier()
+    #     torch.cuda.synchronize()
+
+
+    def _broadcast_module(self, module, prefix=None, empty_cache=False, need_gather=False):
         count, num_params = 0, len(list(module.named_parameters()))
         for name, param in module.named_parameters(prefix=prefix):
             # broadcast
@@ -2145,14 +2178,25 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
 
                 # For ZeRO-3, allgather sharded parameter and broadcast to all vllm engines by rank 0
                 with deepspeed.zero.GatheredParameters([param], enabled=need_gather):
-                    if torch.distributed.get_rank() == 0:
-                        if use_ray:
-                            import ray.util.collective as collective
-
-                            collective.broadcast(param.data, 0, group_name=self._model_update_group)
-                        else:
-                            torch.distributed.broadcast(param.data, 0, group=self._model_update_group)
-                        ray.get(refs)
+                    # Clear active sub-modules before partitioning
+                    if hasattr(param, 'ds_active_sub_modules'):
+                        # Store the active sub-modules to restore later
+                        active_sub_modules = param.ds_active_sub_modules.copy()
+                        param.ds_active_sub_modules.clear()
+                    
+                    try:
+                        if torch.distributed.get_rank() == 0:
+                            if use_ray:
+                                import ray.util.collective as collective
+                                collective.broadcast(param.data, 0, group_name=self._model_update_group)
+                            else:
+                                torch.distributed.broadcast(param.data, 0, group=self._model_update_group)
+                            ray.get(refs)
+                    finally:
+                        # Restore active sub-modules
+                        if hasattr(param, 'ds_active_sub_modules') and 'active_sub_modules' in locals():
+                            param.ds_active_sub_modules.update(active_sub_modules)
+                            
             # CUDA IPC
             else:
                 from torch.multiprocessing.reductions import reduce_tensor
@@ -2185,6 +2229,66 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
                         ray.get(refs)
                     torch.distributed.barrier()
                     torch.cuda.synchronize()
+    
+    # def _broadcast_module(self,module,prefix=None,empty_cache=False,need_gather=False):
+    #     count, num_params = 0, len(list(module.named_parameters()))
+    #     for name, param in module.named_parameters(prefix=prefix):
+    #         # broadcast
+    #         count += 1
+    #         if not self.use_cuda_ipc:
+    #             use_ray = getattr(self.strategy.args, "vllm_sync_with_ray", False)
+    #             # Fire all vllm engines for broadcast
+    #             if torch.distributed.get_rank() == 0:
+    #                 shape = param.shape if self.strategy.args.zero_stage != 3 else param.ds_shape
+    #                 refs = [
+    #                     engine.update_weight.remote(
+    #                         name, dtype=param.dtype, shape=shape, empty_cache=empty_cache and count==num_params,
+    #                     )
+    #                     for engine in self.vllm_engines
+    #                 ]
+
+    #             # For ZeRO-3, allgather sharded parameter and broadcast to all vllm engines by rank 0
+    #             with deepspeed.zero.GatheredParameters([param], enabled=need_gather):
+    #                 if torch.distributed.get_rank() == 0:
+    #                     if use_ray:
+    #                         import ray.util.collective as collective
+
+    #                         collective.broadcast(param.data, 0, group_name=self._model_update_group)
+    #                     else:
+    #                         torch.distributed.broadcast(param.data, 0, group=self._model_update_group)
+    #                     ray.get(refs)
+    #         # CUDA IPC
+    #         else:
+    #             from torch.multiprocessing.reductions import reduce_tensor
+
+    #             # For ZeRO-3, allgather sharded parameter and broadcast to all vllm engines by rank 0
+    #             with deepspeed.zero.GatheredParameters([param], enabled=need_gather):
+    #                 weight = param.data.clone()
+    #                 ipc_handle = reduce_tensor(weight)
+
+    #                 ipc_handle = {get_physical_gpu_id(): ipc_handle}
+    #                 ipc_handle_list = [None] * torch.distributed.get_world_size()
+    #                 torch.distributed.all_gather_object(ipc_handle_list, ipc_handle)
+
+    #                 if torch.distributed.get_rank() == 0:
+    #                     ipc_handles = {}
+    #                     for d in ipc_handle_list:
+    #                         ipc_handles.update(d)
+
+    #                     shape = param.shape if self.strategy.args.zero_stage != 3 else param.ds_shape
+    #                     refs = [
+    #                         engine.update_weight_cuda_ipc.remote(
+    #                             name,
+    #                             dtype=param.dtype,
+    #                             shape=shape,
+    #                             ipc_handles=ipc_handles,
+    #                             empty_cache=empty_cache and count==num_params,
+    #                         )
+    #                         for engine in self.vllm_engines
+    #                     ]
+    #                     ray.get(refs)
+    #                 torch.distributed.barrier()
+    #                 torch.cuda.synchronize()
 
     def _broadcast_to_vllm(self):
         use_prefix_cache = getattr(self.strategy.args, "enable_prefix_caching", False)
@@ -2196,16 +2300,6 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
 
         torch.cuda.empty_cache()
 
-        # # --- 修正箇所 ---
-        # # self.actor.model が DeepSpeed Engine のようなラッパーかどうかを確認
-        # if hasattr(self.actor.model, "module"):
-        #     # ラップされている場合 (.module 属性を持つ場合) は、それを使って元のモデルを取得
-        #     model = self.actor.model.module
-        # else:
-        #     # ラップされていない場合 (生のモデルの場合) は、それをそのまま使う
-        #     model = self.actor.model
-        # # --- 修正箇所 ---
-        
         model = self.actor.model.module
 
         use_lora = False

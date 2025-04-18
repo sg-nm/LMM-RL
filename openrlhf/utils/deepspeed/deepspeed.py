@@ -250,7 +250,8 @@ class DeepspeedStrategy(ABC):
         if self.is_rlhf and is_actor and self.args.pretrain_data is not None:
             train_batch_size *= 2
         ds_config["train_batch_size"] = train_batch_size * self.ring_attn_size
-        ds_config["gradient_accumulation_steps"] = 1
+        if self.args.grad_accum_steps == 0:
+            ds_config["gradient_accumulation_steps"] = 1
 
         return ds_config
 
