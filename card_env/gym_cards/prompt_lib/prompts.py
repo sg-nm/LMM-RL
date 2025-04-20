@@ -5,6 +5,14 @@ By Tianzhe
 """
 
 
+import json
+example = {
+  "cards": ['4', '3', '2', 'K'],
+  "number": [4, 3, 2, 10],
+  "formula": "4*3+2+10=24",
+}
+example_json_text = json.dumps(example, ensure_ascii=False)
+
 Q_GeneralPoint_EQN_VL = """
 ## Task Description
 You are an expert {target_number} points card game player. You are observing these four cards in the image.
@@ -12,13 +20,18 @@ Note that {face_card_msg}, and each card must be used once.
 Your goal is to output a formula that evaluates to {target_number} using numbers from the cards and operators such as '+', '-', '*', '/', '(', ')', and '='.
 
 ## Output format
-Your response should be a valid json file in the following format:
+Your response should be a valid JSON file in the following format:
 {{
-  "cards": [x, y, z, w], where {face_card_msg},
+  "cards": [x, y, z, w], where {face_card_msg} Also, omit the suit of the cards.,
   "number": [a, b, c, d], where a, b, c, and d are the numbers on the cards,
   "thought": 'a thought process to build the formula',
   "formula": 'an equation that equals {target_number}',
 }}
+
+## Output Example
+{example_json_text}
+
+Provide only the JSON.
 
 """
 

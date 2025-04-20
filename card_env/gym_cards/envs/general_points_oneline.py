@@ -193,14 +193,20 @@ class GeneralPointEnv_oneline(gym.Env):
 
     def step(self, action):
         terminated, reward, info = False, 0, {}
+        verify_info = ""
         self.remaining_step -= 1
         if self.remaining_step == -1:
             return self._terminate_step(-1, 'step_limit_reached', is_truncated=True)
 
         current_formula = re_match(action, 'formula')
+        if current_formula == "None":
+            verify_info += "JSON format of formula is not correct. "
         recognized_cards = re_match(action, 'cards')
+        if recognized_cards == "None":
+            verify_info += "JSON format of cards is not correct. "
         translated_number = re_match(action, 'number')
-        # transform string to list
+        if translated_number == "None":
+            verify_info += "JSON format of number is not correct. "
         
         try:
             current_formula = current_formula.split('=')[0]
@@ -208,11 +214,15 @@ class GeneralPointEnv_oneline(gym.Env):
             pass
         
         recognized_cards = robust_str_to_list(recognized_cards)
+        if len(recognized_cards) != 4:
+            verify_info += "Number of recognized cards is not 4. "
         translated_number = robust_str_to_list(translated_number)
+        if len(translated_number) != 4:
+            verify_info += "Number of recognized numbers is not 4. "
 
-        reward, verify_info = step_rewards(card_nums=self.cards_num, current_formula=current_formula, solutions=self.solution, target_points=self.target_points, \
+        reward, verify_info_step_reward = step_rewards(card_nums=self.cards_num, current_formula=current_formula, solutions=self.solution, target_points=self.target_points, \
             recognized_cards=recognized_cards, translated_number=translated_number, gt_cards=self.cards_without_suit, language_only=self.language_only)
-        self.verify_info = verify_info
+        self.verify_info = verify_info + "\n" + verify_info_step_reward
 
         if reward == max(REWARD_FN.values()):
             terminated = True

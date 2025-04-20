@@ -187,7 +187,7 @@ def create_vllm_engines(
                 seed=seed + i,
                 distributed_executor_backend=distributed_executor_backend,
                 max_seq_len_to_capture=max_model_len,
-                # max_model_len=max_model_len,
+                max_model_len=max_model_len,
                 enable_prefix_caching=enable_prefix_caching,
                 dtype="bfloat16",
                 trust_remote_code=True,

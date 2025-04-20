@@ -27,10 +27,19 @@ env_config:
   id: 'gym_cards/GeneralPoint-oneline-v0'
   target_points: 24
   treat_face_cards_as_10: true
-  resolution: 512
+  resolution: 448
   face_cards_color: "black"
   verify_iter: 5
   num_steps: 8
+
+eval_env_config:
+  id: 'gym_cards/GeneralPoint-oneline-v0'
+  target_points: 24
+  treat_face_cards_as_10: true
+  resolution: 448
+  face_cards_color: "black"
+  verify_iter: 5
+  num_evaluations: 7
 
 model: qwen25-vl
 model_path: "Qwen/Qwen2.5-VL-3B-Instruct"

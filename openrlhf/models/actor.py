@@ -324,6 +324,7 @@ class MultiModalActor(nn.Module):
         packing_samples=False,
         temperature=1.0,
         use_liger_kernel=False,
+        freeze_vision_encoder=True,
         **kwargs,
     ) -> None:
         super().__init__()
@@ -410,6 +411,10 @@ class MultiModalActor(nn.Module):
             self.packing_samples = packing_samples
         else:
             self.model = pretrain_or_model
+
+        if freeze_vision_encoder:
+            print("Freezing vision encoder")
+            self.freeze_vision_encoder()
 
     @torch.no_grad()
     def generate(self, input_ids: torch.Tensor, **kwargs) -> Union[
@@ -613,3 +618,7 @@ class MultiModalActor(nn.Module):
 
     def print_trainable_parameters(self):
         self.model.print_trainable_parameters()
+
+    def freeze_vision_encoder(self):
+        for param in self.model.visual.parameters():
+            param.requires_grad = False

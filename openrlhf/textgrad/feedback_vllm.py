@@ -60,8 +60,8 @@ Feedback:
 
 ## Prompt for feedback models on card game
 FEEDBACK_PROMPT_CARD = """Your task is to provide a helpful feedback for another model so that the model can achieve the goal better. 
-You should refer to the `Model's Answer` and `Verification message` below and provide the feedback that can improve the model's thought and answer.
-Note that DO NOT provide or include the answer of the task directly in your feedback even if you know it.
+You should refer to the `Model's Answer`, `Verification message`, and `Answer examples of formula` below and provide the feedback that can improve the model's thought and answer.
+Note that DO NOT provide or include the answer of the task directly in your feedback even if you know it. Your goal is to help the model to improve its thought and answer.
 Please also point out the output format of the model's response if it is not correct.
 
 {task}

@@ -462,6 +462,7 @@ if __name__ == "__main__":
     parser.add_argument("--multimodal", action="store_true", default=False)
     parser.add_argument("--feedback_rewards", type=float, nargs=3, default=(-1.0, 1.0, 2.0), help="Rewards for (degraded, keep, improved) cases")
     parser.add_argument("--env_config", type=str, default=None, help="Environment config file")
+    parser.add_argument("--freeze_vision_encoder", action="store_true", default=False)
 
 
     args = parser.parse_args()

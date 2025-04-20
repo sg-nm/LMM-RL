@@ -341,10 +341,10 @@ class PPOTrainer(ABC):
 
                 if "policy_loss" in status:
                     short_status = {
-                        "pg": status["policy_loss"],
-                        "rm": status["reward"],
-                        "ret": status["return"],
-                        "glen": status["response_length"],
+                        "pl": status["policy_loss"],
+                        "rw": status["reward"],
+                        "rt": status["return"],
+                        "rlen": status["response_length"],
                         "tlen": status["total_length"],
                         "kl": status["kl"],
                         "act_lr": status["actor_lr"],

@@ -181,6 +181,8 @@ def re_match(text: str, pattern: str):
     try:
         output_dict = json.loads(text)
         pred = output_dict[pattern]
+        if not isinstance(pred, str):
+            pred = str(pred)
     except:
         try:
             pattern_re = re.search(RE_PATTERN_DICT[pattern], text)

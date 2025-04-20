@@ -4,6 +4,7 @@ import copy
 import math
 import gc
 import traceback
+import re
 import numpy as np
 import gymnasium as gym
 from datetime import timedelta
@@ -39,7 +40,7 @@ from openrlhf.textgrad.custom_reward_functions import check_answer_commonsense_q
 from openrlhf.trainer.ppo_utils.experience_maker import NaiveExperienceMaker, Samples
 from card_env.gym_cards.envs.general_points_oneline import GeneralPointEnv_oneline
 from card_env.gym_cards.config_dataclass import EnvConfig, PromptConfig
-from card_env.gym_cards.prompt_lib import PROMPT_FN
+from card_env.gym_cards.prompt_lib import PROMPT_FN, example_json_text
 
 
 
@@ -213,7 +214,8 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         self.formulate_oracle_arguments()
         self.custom_reward_func = None
         self.processor = data_processor
-        self.history_length = 2
+        self.history_length = 1
+        self.json_pattern = r"```json\n(.*?)\n```"
 
 
     def formulate_oracle_arguments(self):
@@ -221,7 +223,8 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         self.oracle_arguments['face_card_msg'] = "'J', 'Q', and 'K' count as '10'." if self.env_config.treat_face_cards_as_10 \
                                         else "'J', 'Q', and 'K' count as '11', '12', and '13' respectively."
         self.oracle_arguments['target_number'] = str(self.target_number)
-    
+        self.oracle_arguments['example_json_text'] = example_json_text
+        
     def formulate_vision_arguments(self, vision_res_list, info_batch):
         for i in range(len(vision_res_list)):
             if 'cards' not in vision_res_list[i].keys():
@@ -277,7 +280,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             ]
         return messages, messages_no_feedback
     
-    def formulate_feedback_prompt(self, task_prompt: str, obs_batch: List[Image.Image],
+    def formulate_feedback_prompt(self, task_prompt: str, obs_batch: List[Image.Image], info_batch: dict,
                          previous_responses: List[List[str]], previous_feedbacks: List[List[str]], previous_verify_infos: List[List[str]]) -> List[dict]:
         
         messages = [[] for _ in range(self.num_envs)]
@@ -294,6 +297,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
                 for idx, (prev_response, prev_feedback, prev_verify_info) in enumerate(zip(previous_responses[i][-self.history_length:], previous_feedbacks[i][-self.history_length:], previous_verify_infos[i][-self.history_length:])):
                     contents.append({"type": "text", "text": f"\n## Previous model's answer ({self.history_length - idx} steps ago):\n{prev_response}"})
                     contents.append({"type": "text", "text": f"\n## Verification message\nYou failed this trial because {prev_verify_info}"})
+                    contents.append({"type": "text", "text": f"\n## Answer examples\ncards: {info_batch['Plain Cards'][i]}, number: {info_batch['Numbers'][i]}, formula: {info_batch['Solution'][i]}"})
                     contents.append({"type": "text", "text": f"\n## Your previous feedback ({self.history_length - idx} steps ago):\n{prev_feedback}"})
             
             elif (len(previous_responses[i]) == len(previous_verify_infos[i])):
@@ -301,6 +305,41 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
                 for idx, (prev_response, prev_verify_info) in enumerate(zip(previous_responses[i][-self.history_length:], previous_verify_infos[i][-self.history_length:])):
                     contents.append({"type": "text", "text": f"\n## Previous model's answer ({self.history_length - idx} steps ago):\n{prev_response}"})
                     contents.append({"type": "text", "text": f"\n## Verification message\nYou failed this trial because {prev_verify_info}"})
+                    contents.append({"type": "text", "text": f"\n## Answer examples\ncards: {info_batch['Plain Cards'][i]}, number: {info_batch['Numbers'][i]}, formula: {info_batch['Solution'][i]}"})
+            else:
+                raise ValueError("The number of previous responses, feedbacks, and verify infos must be the same.")
+            
+            contents.append({"type": "text", "text": "Feedback:"})
+            
+            messages[i] = [
+                {"role": "user",
+                 "content": contents,
+                },
+            ]
+        return messages
+    
+    def formulate_feedback_prompt_for_LLMTeacher(self, task_prompt: str, info_batch: dict,
+                         previous_responses: List[List[str]], previous_feedbacks: List[List[str]], previous_verify_infos: List[List[str]]) -> List[dict]:
+        
+        messages = [[] for _ in range(self.num_envs)]
+
+        for i in range(self.num_envs):
+            contents = []
+            feedback_prompt = FEEDBACK_PROMPT_CARD.format(task=task_prompt)
+            contents.append({"type": "text", "text": feedback_prompt})
+            if (len(previous_responses[i]) == len(previous_verify_infos[i]) == len(previous_feedbacks[i])):
+                assert len(previous_responses[i]) == len(previous_feedbacks[i]) == len(previous_verify_infos[i]), "The number of previous responses, feedbacks, and verify infos must be the same."
+                for idx, (prev_response, prev_feedback, prev_verify_info) in enumerate(zip(previous_responses[i][-self.history_length:], previous_feedbacks[i][-self.history_length:], previous_verify_infos[i][-self.history_length:])):
+                    contents.append({"type": "text", "text": f"\n## Previous model's answer ({self.history_length - idx} steps ago):\n{prev_response}"})
+                    contents.append({"type": "text", "text": f"\n## Verification message\nYou failed this trial because {prev_verify_info}"})
+                    contents.append({"type": "text", "text": f"\n## Answer examples\ncards: {info_batch['Plain Cards'][i]}, number: {info_batch['Numbers'][i]}, formula: {info_batch['Solution'][i]}"})
+                    contents.append({"type": "text", "text": f"\n## Your previous feedback ({self.history_length - idx} steps ago):\n{prev_feedback}"})
+            
+            elif (len(previous_responses[i]) == len(previous_verify_infos[i])):
+                for idx, (prev_response, prev_verify_info) in enumerate(zip(previous_responses[i][-self.history_length:], previous_verify_infos[i][-self.history_length:])):
+                    contents.append({"type": "text", "text": f"\n## Previous model's answer ({self.history_length - idx} steps ago):\n{prev_response}"})
+                    contents.append({"type": "text", "text": f"\n## Verification message\nYou failed this trial because {prev_verify_info}"})
+                    contents.append({"type": "text", "text": f"\n## Answer examples\ncards: {info_batch['Plain Cards'][i]}, number: {info_batch['Numbers'][i]}, formula: {info_batch['Solution'][i]}"})
             else:
                 raise ValueError("The number of previous responses, feedbacks, and verify infos must be the same.")
             
@@ -364,7 +403,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         replay_buffer = deque(maxlen=self.env_config.num_steps + 1)
         episode_start = np.zeros(self.num_envs, dtype=bool)
 
-        for step in tqdm(range(self.env_config.num_steps), desc="Collecting trajectories"):
+        for step in tqdm(range(self.env_config.num_steps), desc="Collecting trajectories", disable=not self.strategy.is_rank_0()):
             vision_res_list = [{} for _ in range(self.num_envs)]
             language_res_list = [{} for _ in range(self.num_envs)]
             self.formulate_vision_arguments(vision_res_list, info_batch)
@@ -382,7 +421,15 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
                 # base model inference w/o feedback
                 mini_batch = self._generate_vllm_with_feedback(messages, messages_no_feedback, obs_batch, self.multimodal, **generate_kwargs)
             
-            # env step
+            # preprocessing the model response to align with json style.
+            for i, model_response in enumerate(mini_batch.output_text):
+                try:
+                    match = re.search(self.json_pattern, model_response, re.DOTALL)
+                    if match:
+                        mini_batch.output_text[i] = match.group(1)
+                except TypeError as e:
+                    pass
+                
             obs_batch, rewards, terminations, truncations, info_batch = self.envs.step(mini_batch.output_text)
             episode_start = np.logical_or(terminations, truncations)
 
@@ -406,7 +453,8 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
                 previous_verify_infos[i].append(info_batch["Verify Info"][i])
 
             # get feedbacks from teacher model
-            feedbacks = self.get_feedbacks(task_prompt, obs_batch, previous_responses, previous_verify_infos, previous_feedbacks, self.multimodal, **generate_kwargs)
+            # feedbacks = self.get_feedbacks(task_prompt, obs_batch, info_batch, previous_responses, previous_verify_infos, previous_feedbacks, self.multimodal, **generate_kwargs)
+            feedbacks = self.get_feedbacks_from_LLMTeacher(task_prompt, info_batch, previous_responses, previous_verify_infos, previous_feedbacks, self.multimodal, **generate_kwargs)
 
             for i, feedback in enumerate(feedbacks):
                 previous_feedbacks[i].append(feedback)
@@ -900,7 +948,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
 
         return mini_batch
     
-    def get_feedbacks(self, task_prompt: str, obs_batch: List[Image.Image], 
+    def get_feedbacks(self, task_prompt: str, obs_batch: List[Image.Image], info_batch: dict,
                       previous_responses: List[List[str]], previous_verify_infos: List[List[str]], previous_feedbacks: List[List[str]], 
                       multimodal=True, **kwargs) -> List[str]:
         """
@@ -928,12 +976,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             include_stop_str_in_output=False,
         )
 
-        feedback_prompts = self.formulate_feedback_prompt(task_prompt, obs_batch, previous_responses, previous_feedbacks, previous_verify_infos)
-        # prompts = [
-        #     self.processor.apply_chat_template([msg], tokenize=False, add_generation_prompt=True)
-        #     for msg in feedback_prompts
-        # ]
-        # all_prompts = sum([[prompt] for prompt in prompts], [])
+        feedback_prompts = self.formulate_feedback_prompt(task_prompt, obs_batch, info_batch, previous_responses, previous_feedbacks, previous_verify_infos)
         batch_size = (len(feedback_prompts) + len(llms) - 1) // len(llms)
 
         # Prepare inputs for vLLM
@@ -954,21 +997,86 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
                 ]
                 refs.append(llm.add_requests.remote(rank, sampling_params=sampling_params, vllm_vision_input=vllm_inputs))
 
-                # for prompt, obs in zip(all_prompts[i * batch_size : (i + 1) * batch_size], obs_batch[i * batch_size : (i + 1) * batch_size]):
-                #     vllm_inputs.append({
-                #         "prompt": prompt.replace('<|image_pad|>', '').replace('<|vision_start|>', '<|vision_start|><|image_pad|>'),
-                #         "multi_modal_data": {"image": obs},
-                #         "mm_processor_kwargs": kwargs["processor_kwargs"]
-                #     })
-                #     refs.append(
-                #         llm.add_requests.remote(rank, sampling_params=sampling_params, vllm_vision_input=vllm_inputs)
-                #     )
         else:
             for i, llm in enumerate(llms):
                 for msg in feedback_prompts[i * batch_size : (i + 1) * batch_size]:
                     prompt = self.processor.apply_chat_template(msg, tokenize=False, add_generation_prompt=True)
                     vllm_inputs.append({"prompt": prompt})
                     refs.append(llm.add_requests.remote(rank, sampling_params=sampling_params, vllm_vision_input=vllm_inputs))
+
+        ray.get(refs)
+
+        if self.strategy.ring_attn_group is None:
+            torch.distributed.barrier()
+        else:
+            time.sleep(3)
+
+        # Retrieve and combine results from all outputs
+        all_output_refs = []
+        for i, llm in enumerate(llms):
+            all_output_refs.append(llm.get_responses.remote(rank))
+        all_outputs = sum(ray.get(all_output_refs), [])
+
+        feedbacks = []
+        for output in all_outputs:
+            feedbacks.append(output.outputs[0].text)
+        
+        return feedbacks
+    
+    def get_feedbacks_from_LLMTeacher(self, task_prompt: str, info_batch: dict,
+                      previous_responses: List[List[str]], previous_verify_infos: List[List[str]], previous_feedbacks: List[List[str]], 
+                      multimodal=True, **kwargs) -> List[str]:
+        """
+        1. Extract model responses from output_text (i.e, extract "Answer: ..." from "Thought: ..." and "Answer: ...")
+        2. Create prompts for feedback model
+        3. Expand prompt list based on the number of samples per prompt
+        4. Distribute requests to engines and collect responses to outputs
+        5. Return feedbacks
+        """
+        self.response_length_list = []
+        rank = torch.distributed.get_rank() // self.strategy.ring_attn_size
+        world_size = torch.distributed.get_world_size() // self.strategy.ring_attn_size
+        if len(self.feedback_model) <= world_size:
+            llms = [self.feedback_model[rank % len(self.feedback_model)]]
+        else:
+            llms = self.feedback_model[rank::world_size]
+
+        sampling_params = SamplingParams(
+            temperature=1.0,
+            top_p=1.0,
+            top_k=-1,
+            max_tokens=1024,
+            min_tokens=1,
+            skip_special_tokens=True,
+            include_stop_str_in_output=False,
+        )
+
+        feedback_prompts = self.formulate_feedback_prompt_for_LLMTeacher(task_prompt, info_batch, previous_responses, previous_feedbacks, previous_verify_infos)
+        batch_size = (len(feedback_prompts) + len(llms) - 1) // len(llms)
+
+        # Prepare inputs for vLLM
+        refs = []
+        # vllm_inputs = []
+        # if multimodal:
+        #     for i, llm in enumerate(llms):
+        #         msg_batch = feedback_prompts[i * batch_size : (i + 1) * batch_size]
+        #         obs_batch_slice = obs_batch[i * batch_size : (i + 1) * batch_size]
+        #         prompts = self.processor.apply_chat_template(msg_batch, tokenize=False, add_generation_prompt=True)
+        #         vllm_inputs = [
+        #             {
+        #                 "prompt": prompt,
+        #                 "multi_modal_data": {"image": obs},
+        #                 "mm_processor_kwargs": kwargs["processor_kwargs"]
+        #             }
+        #             for prompt, obs in zip(prompts, obs_batch_slice)
+        #         ]
+        #         refs.append(llm.add_requests.remote(rank, sampling_params=sampling_params, vllm_vision_input=vllm_inputs))
+
+        # else:
+        for i, llm in enumerate(llms):
+            msg = feedback_prompts[i * batch_size : (i + 1) * batch_size]
+            prompt = self.processor.apply_chat_template(msg, tokenize=False, add_generation_prompt=True)
+            refs.append(llm.add_requests.remote(rank, sampling_params=sampling_params, vllm_vision_input=prompt))
 
         ray.get(refs)
 

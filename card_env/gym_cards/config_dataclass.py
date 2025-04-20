@@ -39,6 +39,16 @@ class EnvConfig:
     num_steps: Optional[int] = None
     
 @dataclass
+class EvalEnvConfig:
+    id: str
+    target_points: Optional[int] = None
+    treat_face_cards_as_10: Optional[bool] = None
+    resolution: Optional[int] = None
+    face_cards_color: Optional[str] = None
+    verify_iter: Optional[int] = None
+    num_evaluations: Optional[int] = None
+
+@dataclass
 class PromptConfig:
     use_vision: bool
     use_language: bool
@@ -67,6 +77,7 @@ class CardEnvConfig:
     num_processes: int
     num_updates: int
     env_config: EnvConfig
+    eval_env_config: EvalEnvConfig
     model: str
     model_path: str
     prompt_config: PromptConfig
@@ -93,6 +104,7 @@ def load_config_from_yaml(path: str) -> CardEnvConfig:
         num_processes=config_dict["num_processes"],
         num_updates=config_dict["num_updates"],
         env_config=EnvConfig(**config_dict["env_config"]),
+        eval_env_config=EvalEnvConfig(**config_dict["eval_env_config"]),
         model=config_dict["model"],
         model_path=config_dict["model_path"],
         prompt_config=PromptConfig(**config_dict["prompt_config"]),
