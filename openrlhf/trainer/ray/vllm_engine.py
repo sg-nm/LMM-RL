@@ -123,6 +123,67 @@ class LLMRayActor:
         # this runs _load_fn(module) for you, no need to dig into llm_engine internals
         self.llm.apply_model(_load_fn)
         return True
+    
+    def get_model_weights(self, param_names):
+        """
+        Get model weights for verification
+        
+        Args:
+            param_names: List of parameter names to retrieve
+                        If empty, returns a list of all parameter names
+        
+        Returns:
+            If param_names is empty: List of all parameter names
+            Otherwise: List of tensors corresponding to the requested parameters
+        """
+
+        result_dict = {}
+        
+        def _collect_params(module):
+            # パラメータを収集するヘルパー関数
+            if not param_names:
+                # 全パラメータ名を収集
+                all_params = {}
+                for name, param in module.named_parameters():
+                    all_params[name] = True
+                result_dict.update(all_params)
+            else:
+                # 指定されたパラメータを収集
+                for name in param_names:
+                    try:
+                        # パラメータ階層を分解
+                        parts = name.split('.')
+                        curr = module
+                        
+                        # パラメータに到達するまで階層を辿る
+                        for part in parts[:-1]:
+                            if part.isdigit():
+                                idx = int(part)
+                                if hasattr(curr, 'layers') and idx < len(curr.layers):
+                                    curr = curr.layers[idx]
+                                else:
+                                    curr = getattr(curr, part)
+                            else:
+                                curr = getattr(curr, part)
+                        
+                        # パラメータを取得
+                        param = getattr(curr, parts[-1])
+                        if hasattr(param, 'data'):
+                            result_dict[name] = param.data.clone().cpu()
+                    except (AttributeError, IndexError) as e:
+                        # パラメータが見つからない場合はスキップ
+                        pass
+            
+            return True
+        
+        # モデルに関数を適用
+        self.llm.apply_model(_collect_params)
+        
+        # 結果を返す
+        if not param_names:
+            return list(result_dict.keys())
+        else:
+            return [result_dict.get(name) for name in param_names]
 
 
 def create_vllm_engines(

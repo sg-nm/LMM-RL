@@ -1775,39 +1775,6 @@ class ActorModelRayActor_Card(BasePPORole):
             args.save_path,
         )
 
-    # def formulate_prompt(self, num_envs: int, task_prompt: str, obs_batch: np.ndarray = None, previous_responses = None, previous_verify_infos = None, history_length: int = 2) -> Tuple[List[dict], List[dict]]:
-        
-    #     messages = [[] for _ in range(num_envs)]
-
-    #     for i in range(num_envs):
-    #         contents = []
-    #         if len(previous_responses[i]) > 0 and len(previous_verify_infos[i]) > 0:
-    #             assert len(previous_responses[i]) == len(previous_verify_infos[i]), "The number of previous responses and verify infos must be the same."
-    #             if obs_batch[i] is not None:
-    #                 pil_image = Image.fromarray(obs_batch[i])
-    #                 contents.append({"type": "image", "image": pil_image})
-    #             contents.append({"type": "text", "text": task_prompt})
-    #             for idx, (prev_response, prev_verify_info) in enumerate(zip(previous_responses[i][-history_length:], previous_verify_infos[i][-history_length:])):
-    #                 contents.append({"type": "text", "text": f"\n## Previous your response ({history_length - idx} steps ago):\n{prev_response}"})
-    #                 contents.append({"type": "text", "text": f"\n## Verification\nYou failed this trial because {prev_verify_info}"})
-    #         else:
-    #             if obs_batch[i] is not None:
-    #                 pil_image = Image.fromarray(obs_batch[i])
-    #                 contents.append({"type": "image", "image": pil_image})
-    #                 contents.append({"type": "text", "text": task_prompt})
-    #             else:
-    #                 contents.append({"type": "text", "text": task_prompt})
-            
-    #         messages[i] = [
-    #             {"role": "user",
-    #              "content": contents,
-    #             },
-    #         ]
-    #     return messages
-    
-
-
-
 class ActorPPOTrainer_CardGame(PPOTrainer):
     def __init__(
         self,
@@ -1966,7 +1933,7 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
             torch.distributed.barrier()
             torch.cuda.synchronize()
 
-        if global_steps == 0 or global_steps == 1:
+        if (global_steps == 0 or global_steps == 1) and self.strategy.args.eval:
             success_rate = self.evaluate()
             if self.strategy.is_rank_0():
                 print(f"Init eval success rate: {success_rate}")
@@ -2053,9 +2020,37 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
     def training_step(self, experience: Experience, global_steps) -> Dict[str, float]:
         return self.training_step_actor(experience)
 
-    def _get_leaf_modules(self,model,use_lora):
+    # def _get_leaf_modules(self,model,use_lora):
+    #     leaf_modules = []
+    #     lora_module_keyword = ["lora_","base_layer"]
+    #     class IsoParamWrapper:
+    #         """
+    #         Some modules may have isolated parameters that are not in submodules.
+    #         This class wraps such parameters in a module so that they can be treated uniformly.
+    #         """
+    #         def __init__(self, name, parameter):
+    #             self.name = name
+    #             self.parameter = parameter
+
+    #         def named_parameters(self,prefix=None):
+    #             # self.name is already the full name. No need to add prefix
+    #             return [(self.name,self.parameter)]
+
+    #     for name,module in model.named_modules():
+    #         if len(list(module.children())) == 0 or (use_lora and hasattr(module,"base_layer")):
+    #             leaf_modules.append((name,module))
+    #         else:
+    #             #find isolated parameter
+    #             for pname, p in module.named_parameters(recurse=False,prefix=name):
+    #                 leaf_modules.append((pname,IsoParamWrapper(pname,p)))
+    #     if use_lora:
+    #         leaf_modules = [(n,m) for n,m in leaf_modules if not any([keyword in n for keyword in lora_module_keyword])]
+    #     return leaf_modules
+
+    def _get_leaf_modules(self, model, use_lora):
         leaf_modules = []
-        lora_module_keyword = ["lora_","base_layer"]
+        lora_module_keyword = ["lora_", "base_layer"]
+        
         class IsoParamWrapper:
             """
             Some modules may have isolated parameters that are not in submodules.
@@ -2065,19 +2060,78 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
                 self.name = name
                 self.parameter = parameter
 
-            def named_parameters(self,prefix=None):
+            def named_parameters(self, prefix=None):
                 # self.name is already the full name. No need to add prefix
-                return [(self.name,self.parameter)]
-
-        for name,module in model.named_modules():
-            if len(list(module.children())) == 0 or (use_lora and hasattr(module,"base_layer")):
-                leaf_modules.append((name,module))
+                return [(self.name, self.parameter)]
+        
+        # 1. まず基本モジュール（layers以外）を処理
+        for name, module in model.named_modules():
+            # model.layersは別途処理するのでスキップ
+            if name.startswith("layers.") or name == "layers":
+                continue
+                
+            if len(list(module.children())) == 0 or (use_lora and hasattr(module, "base_layer")):
+                leaf_modules.append((name, module))
             else:
-                #find isolated parameter
-                for pname, p in module.named_parameters(recurse=False,prefix=name):
-                    leaf_modules.append((pname,IsoParamWrapper(pname,p)))
+                # 独立したパラメータを処理
+                for pname, p in module.named_parameters(recurse=False, prefix=name):
+                    leaf_modules.append((pname, IsoParamWrapper(pname, p)))
+        
+        # 2. 次にmodel.layersを明示的に処理
+        if hasattr(model, 'model') and hasattr(model.model, 'layers'):
+            layers = model.model.layers
+            if self.strategy.is_rank_0():
+                print(f"Processing model.layers: {len(layers)} layers found")
+            
+            # 各レイヤーを処理
+            for i, layer in enumerate(layers):
+                layer_prefix = f"model.layers.{i}"
+                
+                # 各レイヤー内の子モジュールを処理
+                for child_name, child in layer.named_children():
+                    full_name = f"{layer_prefix}.{child_name}"
+                    
+                    if len(list(child.children())) == 0 or (use_lora and hasattr(child, "base_layer")):
+                        leaf_modules.append((full_name, child))
+                    else:
+                        # 子モジュール内のリーフモジュールを処理
+                        for sub_name, sub_module in child.named_modules():
+                            if sub_name == "":  # 自分自身はスキップ
+                                continue
+                            
+                            sub_full_name = f"{full_name}.{sub_name}"
+                            if len(list(sub_module.children())) == 0 or (use_lora and hasattr(sub_module, "base_layer")):
+                                leaf_modules.append((sub_full_name, sub_module))
+                        
+                        # モジュール内の独立したパラメータを処理
+                        for param_name, param in child.named_parameters(recurse=False):
+                            param_full_name = f"{full_name}.{param_name}"
+                            leaf_modules.append((param_full_name, IsoParamWrapper(param_full_name, param)))
+        
+        # LoRAモジュールをフィルタリング
         if use_lora:
-            leaf_modules = [(n,m) for n,m in leaf_modules if not any([keyword in n for keyword in lora_module_keyword])]
+            orig_count = len(leaf_modules)
+            leaf_modules = [(n, m) for n, m in leaf_modules if not any([keyword in n for keyword in lora_module_keyword])]
+            if self.strategy.is_rank_0():
+                print(f"Filtered LoRA modules: {orig_count} -> {len(leaf_modules)}")
+        
+        # デバッグ情報
+        if self.strategy.is_rank_0():
+            module_types = {}
+            for name, _ in leaf_modules:
+                top_level = name.split('.')[0]
+                module_types[top_level] = module_types.get(top_level, 0) + 1
+            
+            # 種類別のモジュール数を表示
+            print(f"Leaf modules by type: {module_types}")
+            
+            # トランスフォーマーレイヤーの数を確認
+            layer_count = 0
+            for name, _ in leaf_modules:
+                if "model.layers" in name:
+                    layer_count += 1
+            print(f"Transformer layer modules: {layer_count}")
+        
         return leaf_modules
 
 
@@ -2158,65 +2212,48 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
                     torch.distributed.barrier()
                     torch.cuda.synchronize()
     
-    # def _broadcast_module(self,module,prefix=None,empty_cache=False,need_gather=False):
-    #     count, num_params = 0, len(list(module.named_parameters()))
-    #     for name, param in module.named_parameters(prefix=prefix):
-    #         # broadcast
+    # def _broadcast_to_vllm(self):
+    #     use_prefix_cache = getattr(self.strategy.args, "enable_prefix_caching", False)
+    #     cache_reset_refs = []
+    #     if use_prefix_cache and torch.distributed.get_rank() == 0:
+    #         # clear prefix cache
+    #         for engine in self.vllm_engines:
+    #             cache_reset_refs.append(engine.reset_prefix_cache.remote())
+
+    #     torch.cuda.empty_cache()
+    #     model = self.actor.model.module
+    #     use_lora = False
+    #     if isinstance(model, PeftModel):
+    #         lora_model = model.base_model
+    #         model = lora_model.model
+    #         use_lora = True
+
+    #     leaf_modules = self._get_leaf_modules(model,use_lora) # parameters of leaf_modules should not overlap
+    #     count, num_modules = 0, len(leaf_modules)
+    #     for key, module in leaf_modules:
+    #         print(f"Broadcasting module: {key}")
     #         count += 1
-    #         if not self.use_cuda_ipc:
-    #             use_ray = getattr(self.strategy.args, "vllm_sync_with_ray", False)
-    #             # Fire all vllm engines for broadcast
-    #             if torch.distributed.get_rank() == 0:
-    #                 shape = param.shape if self.strategy.args.zero_stage != 3 else param.ds_shape
-    #                 refs = [
-    #                     engine.update_weight.remote(
-    #                         name, dtype=param.dtype, shape=shape, empty_cache=empty_cache and count==num_params,
-    #                     )
-    #                     for engine in self.vllm_engines
-    #                 ]
+    #         with ExitStack() as stack:
+    #             need_gather = self.strategy.args.zero_stage == 3
+    #             module_name = key.split(".")[-1]
+    #             raw_module = module
+    #             if use_lora and hasattr(raw_module, "base_layer"):
+    #                 #This is a lora module
+    #                 stack.enter_context(deepspeed.zero.GatheredParameters(raw_module.parameters(), enabled=need_gather))
+    #                 raw_module.merge(safe_merge=True)
+    #                 # we don't really replace the module, but we utilize _replace_module to get the merged module
+    #                 fake_parent = type('FakeParent',(),{})()
+    #                 lora_model._replace_module(fake_parent, module_name, raw_module.get_base_layer(), raw_module)
+    #                 module = getattr(fake_parent, module_name)
+    #                 need_gather = False
+    #                 stack.callback(raw_module.unmerge)
 
-    #             # For ZeRO-3, allgather sharded parameter and broadcast to all vllm engines by rank 0
-    #             with deepspeed.zero.GatheredParameters([param], enabled=need_gather):
-    #                 if torch.distributed.get_rank() == 0:
-    #                     if use_ray:
-    #                         import ray.util.collective as collective
+    #             self._broadcast_module(module, prefix=key, empty_cache=count==num_modules,need_gather=need_gather)
 
-    #                         collective.broadcast(param.data, 0, group_name=self._model_update_group)
-    #                     else:
-    #                         torch.distributed.broadcast(param.data, 0, group=self._model_update_group)
-    #                     ray.get(refs)
-    #         # CUDA IPC
-    #         else:
-    #             from torch.multiprocessing.reductions import reduce_tensor
-
-    #             # For ZeRO-3, allgather sharded parameter and broadcast to all vllm engines by rank 0
-    #             with deepspeed.zero.GatheredParameters([param], enabled=need_gather):
-    #                 weight = param.data.clone()
-    #                 ipc_handle = reduce_tensor(weight)
-
-    #                 ipc_handle = {get_physical_gpu_id(): ipc_handle}
-    #                 ipc_handle_list = [None] * torch.distributed.get_world_size()
-    #                 torch.distributed.all_gather_object(ipc_handle_list, ipc_handle)
-
-    #                 if torch.distributed.get_rank() == 0:
-    #                     ipc_handles = {}
-    #                     for d in ipc_handle_list:
-    #                         ipc_handles.update(d)
-
-    #                     shape = param.shape if self.strategy.args.zero_stage != 3 else param.ds_shape
-    #                     refs = [
-    #                         engine.update_weight_cuda_ipc.remote(
-    #                             name,
-    #                             dtype=param.dtype,
-    #                             shape=shape,
-    #                             ipc_handles=ipc_handles,
-    #                             empty_cache=empty_cache and count==num_params,
-    #                         )
-    #                         for engine in self.vllm_engines
-    #                     ]
-    #                     ray.get(refs)
-    #                 torch.distributed.barrier()
-    #                 torch.cuda.synchronize()
+    #     if cache_reset_refs:
+    #         ray.get(cache_reset_refs)
+    #     torch.cuda.empty_cache()
+    #     torch.distributed.barrier()
 
     def _broadcast_to_vllm(self):
         use_prefix_cache = getattr(self.strategy.args, "enable_prefix_caching", False)
@@ -2227,18 +2264,42 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
                 cache_reset_refs.append(engine.reset_prefix_cache.remote())
 
         torch.cuda.empty_cache()
-
+        
+        # モデルを取得
         model = self.actor.model.module
-
         use_lora = False
         if isinstance(model, PeftModel):
             lora_model = model.base_model
             model = lora_model.model
             use_lora = True
 
-        leaf_modules = self._get_leaf_modules(model,use_lora) # parameters of leaf_modules should not overlap
+        # デバッグ情報の追加
+        if self.strategy.is_rank_0():
+            print("=== Model Structure Diagnosis ===")
+            print(f"Model Type: {type(model).__name__}")
+            
+            # トップレベルの属性を確認
+            print("Model Attributes:", list(vars(model).keys()))
+            
+            # モデル内にlayersが存在するか確認
+            if hasattr(model, 'model') and hasattr(model.model, 'layers'):
+                print(f"layers found: {len(model.model.layers)} layers")
+            elif hasattr(model, 'layers'):
+                print(f"layers found directly: {len(model.layers)} layers")
+            else:
+                print("Warning: No layers found in model structure!")
+
+        # リーフモジュールの収集（修正版）
+        leaf_modules = self._get_leaf_modules(model, use_lora)
+        
+        if self.strategy.is_rank_0():
+            print(f"Total leaf modules to process: {len(leaf_modules)}")
+        
+        # モジュールをvLLMに同期
         count, num_modules = 0, len(leaf_modules)
-        for key,module in leaf_modules:
+        for key, module in leaf_modules:
+            # if self.strategy.is_rank_0():
+            #     print(f"Broadcasting module: {key}")
             count += 1
             with ExitStack() as stack:
                 need_gather = self.strategy.args.zero_stage == 3
@@ -2255,12 +2316,20 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
                     need_gather = False
                     stack.callback(raw_module.unmerge)
 
-                self._broadcast_module(module, prefix=key, empty_cache=count==num_modules,need_gather=need_gather)
+                self._broadcast_module(module, prefix=key, empty_cache=count==num_modules, need_gather=need_gather)
+                
+                # 進捗状況を表示（10%ごと）
+                if self.strategy.is_rank_0() and count % max(1, num_modules // 10) == 0:
+                    print(f"Progress: {count}/{num_modules} modules processed ({count/num_modules*100:.1f}%)")
 
         if cache_reset_refs:
             ray.get(cache_reset_refs)
         torch.cuda.empty_cache()
         torch.distributed.barrier()
+        
+        # 検証情報
+        if self.strategy.is_rank_0():
+            print("=== Weight update complete ===")
 
     def _save_checkpoint(self, args, tag, client_states):
         # call remote critic
@@ -2288,6 +2357,36 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
                 ray.get(ref)
         torch.distributed.barrier()
 
+    
+    def verify_weight_updates(self):
+        """更新された重みを検証する関数"""
+        if not self.strategy.is_rank_0() or self.vllm_engines is None:
+            return
+        
+        # サンプリングするパラメータのリスト
+        key_params = [
+            "model.embed_tokens.weight",
+            "model.layers.0.self_attn.q_proj.weight",
+            "model.layers.10.self_attn.k_proj.weight",
+            "model.layers.20.mlp.gate_proj.weight",
+            "model.layers.35.mlp.down_proj.weight",
+            "model.norm.weight",
+            "lm_head.weight"
+        ]
+        
+        print("=== 重み更新検証 ===")
+        # vLLMエンジンから重みを取得
+        weights_ref = self.vllm_engines[0].get_model_weights.remote(key_params)
+        weights = ray.get(weights_ref)
+        
+        # 結果を表示
+        for name, weight in zip(key_params, weights):
+            if weight is not None:
+                print(f"{name}: Shape={weight.shape}, Mean={weight.mean().item():.6f}")
+            else:
+                print(f"{name}: Not found")
+    
+    
     def reload_states(self):
         reload_deepspeed_states(self.actor.model)
 

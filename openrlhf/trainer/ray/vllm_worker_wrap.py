@@ -1,4 +1,5 @@
 import torch
+import re
 from vllm.worker.worker import Worker
 
 from openrlhf.utils.distributed_util import init_process_group
@@ -38,9 +39,21 @@ class WorkerWrap(Worker):
 
     def update_weight(self, name, dtype, shape, empty_cache=False):
         """Broadcast weight to all vllm workers from source rank 0 (actor model)"""
-        if torch.distributed.get_rank() == 0:
-            print(f"update weight: {name}, dtype: {dtype}, shape: {shape}")
+        # if torch.distributed.get_rank() == 0 and not "visual" in name:
+        #     print(f"update weight: {name}, dtype: {dtype}, shape: {shape}")
 
+        if "model.layers" in name and torch.distributed.get_rank() == 0:
+            # トランスフォーマーレイヤーの最初と最後の層、および10層ごとに詳細を表示
+            layer_match = re.search(r'model\.layers\.(\d+)', name)
+            if layer_match:
+                layer_idx = int(layer_match.group(1))
+                if layer_idx == 0 or layer_idx % 10 == 0 or layer_idx == 35:  # 最初、10ごと、最後のレイヤー
+                    print(f"update weight: {name}, dtype: {dtype}, shape: {shape}")
+        # else:
+        #     # 非トランスフォーマーレイヤーは常に表示
+        #     print(f"update weight: {name}, dtype: {dtype}, shape: {shape}")
+        
+        
         assert dtype == self.model_config.dtype, f"mismatch dtype: src {dtype}, dst {self.model_config.dtype}"
         weight = torch.empty(shape, dtype=dtype, device="cuda")
         if self._model_update_with_ray:

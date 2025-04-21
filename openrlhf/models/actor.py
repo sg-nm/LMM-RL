@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 from peft import LoraConfig, TaskType, get_peft_model
 from peft.tuners.lora import LoraLayer
-from transformers import BitsAndBytesConfig, AutoModelForCausalLM, Qwen2_5_VLForConditionalGeneration, Qwen2_5_VLConfig
+from transformers import BitsAndBytesConfig, AutoModelForCausalLM, Qwen2_5_VLForConditionalGeneration, Qwen2_5_VLConfig, Qwen2ForCausalLM
 from transformers.integrations.deepspeed import HfDeepSpeedConfig
 from flash_attn.utils.distributed import all_gather
 
