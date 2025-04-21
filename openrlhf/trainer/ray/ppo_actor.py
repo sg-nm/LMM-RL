@@ -2100,24 +2100,30 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
 
                 # For ZeRO-3, allgather sharded parameter and broadcast to all vllm engines by rank 0
                 with deepspeed.zero.GatheredParameters([param], enabled=need_gather):
-                    # Clear active sub-modules before partitioning
-                    if hasattr(param, 'ds_active_sub_modules'):
-                        # Store the active sub-modules to restore later
-                        active_sub_modules = param.ds_active_sub_modules.copy()
-                        param.ds_active_sub_modules.clear()
-                    
-                    try:
-                        if torch.distributed.get_rank() == 0:
-                            if use_ray:
-                                import ray.util.collective as collective
-                                collective.broadcast(param.data, 0, group_name=self._model_update_group)
-                            else:
-                                torch.distributed.broadcast(param.data, 0, group=self._model_update_group)
-                            ray.get(refs)
-                    finally:
-                        # Restore active sub-modules
-                        if hasattr(param, 'ds_active_sub_modules') and 'active_sub_modules' in locals():
-                            param.ds_active_sub_modules.update(active_sub_modules)
+                    if torch.distributed.get_rank() == 0:
+                        if use_ray:
+                            import ray.util.collective as collective
+                            collective.broadcast(param.data, 0, group_name=self._model_update_group)
+                        else:
+                            torch.distributed.broadcast(param.data, 0, group=self._model_update_group)
+                        ray.get(refs)
+                    # # Clear active sub-modules before partitioning
+                    # if hasattr(param, 'ds_active_sub_modules'):
+                    #     # Store the active sub-modules to restore later
+                    #     active_sub_modules = param.ds_active_sub_modules.copy()
+                    #     param.ds_active_sub_modules.clear()
+                    # try:
+                    #     if torch.distributed.get_rank() == 0:
+                    #         if use_ray:
+                    #             import ray.util.collective as collective
+                    #             collective.broadcast(param.data, 0, group_name=self._model_update_group)
+                    #         else:
+                    #             torch.distributed.broadcast(param.data, 0, group=self._model_update_group)
+                    #         ray.get(refs)
+                    # finally:
+                    #     # Restore active sub-modules
+                    #     if hasattr(param, 'ds_active_sub_modules') and 'active_sub_modules' in locals():
+                    #         param.ds_active_sub_modules.update(active_sub_modules)
                             
             # CUDA IPC
             else:

@@ -455,6 +455,8 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             # get feedbacks from teacher model
             # feedbacks = self.get_feedbacks(task_prompt, obs_batch, info_batch, previous_responses, previous_verify_infos, previous_feedbacks, self.multimodal, **generate_kwargs)
             feedbacks = self.get_feedbacks_from_LLMTeacher(task_prompt, info_batch, previous_responses, previous_verify_infos, previous_feedbacks, self.multimodal, **generate_kwargs)
+            if step == 0 and self.strategy.is_rank_0():
+                print(f"Feedbacks: {feedbacks}")
 
             for i, feedback in enumerate(feedbacks):
                 previous_feedbacks[i].append(feedback)

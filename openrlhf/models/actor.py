@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 from peft import LoraConfig, TaskType, get_peft_model
 from peft.tuners.lora import LoraLayer
-from transformers import BitsAndBytesConfig, AutoModelForCausalLM, Qwen2_5_VLForConditionalGeneration
+from transformers import BitsAndBytesConfig, AutoModelForCausalLM, Qwen2_5_VLForConditionalGeneration, Qwen2_5_VLConfig
 from transformers.integrations.deepspeed import HfDeepSpeedConfig
 from flash_attn.utils.distributed import all_gather
 
@@ -351,14 +351,19 @@ class MultiModalActor(nn.Module):
             else:
                 nf4_config = None
 
-            ## There is no AutoModelForConditionalGeneration in transformers. We manually implement it.
-            # config = smart_load_config(pretrain_or_model)
-            # model_cls = get_generation_cls(config, use_liger_kernel=use_liger_kernel)
             if use_liger_kernel:
                 Patch.apply_liger_kernel()
             Patch._load_all_patches()
+
+            if "suganuma" in pretrain_or_model:
+                config = Qwen2_5_VLConfig.from_pretrained(pretrain_or_model)
+                print(f"Loading model from {pretrain_or_model}............................................................")
+            else:
+                config = None
+
             self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
                 pretrain_or_model,
+                config=config,
                 trust_remote_code=False,
                 attn_implementation=attn_implementation,
                 quantization_config=nf4_config,
