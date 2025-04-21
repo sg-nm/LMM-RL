@@ -1,32 +1,32 @@
 [
     {
         "prompt": "\n## Task Description\nYou are an expert 24 points card game player. You are observing these four cards in the image.\nNote that 'J', 'Q', and 'K' count as '10'., and each card must be used once.\nYour goal is to output a formula that evaluates to 24 using numbers from the cards and operators such as '+', '-', '*', '/', '(', ')', and '='.\n\n## Output format\nYour response should be a valid JSON file in the following format:\n{\n  \"cards\": [x, y, z, w], where 'J', 'Q', and 'K' count as '10'. Also, omit the suit of the cards.,\n  \"number\": [a, b, c, d], where a, b, c, and d are the numbers on the cards,\n  \"thought\": 'a thought process to build the formula',\n  \"formula\": 'an equation that equals 24',\n}\n\n## Output Example\n{\"cards\": [\"4\", \"3\", \"2\", \"K\"], \"number\": [4, 3, 2, 10], \"formula\": \"4*3+2+10=24\"}\n\nProvide only the JSON.\n\n",
-        "responses": "{\n  \"cards\": [\"A\", \"K\", \"7\", \"8\"],\n  \"number\": [1, 10, 7, 8],\n  \"thought\": \"I need to use the Ace as 1, King as 10, Seven as 7, and Eight as 8. The formula should involve multiplication and addition to reach 24.\",\n  \"formula\": \"10 * (8 - 7) + 1 = 24\"\n}",
-        "verify_info": "\nillegal characters.",
-        "reward": -3.0
+        "responses": "{\"formula\": \"10+(8-4)\", \"cards\": [\"8\", \"4\", \"10\", \"J\"], \"number\": [10, 8, 4, 10], \"cardsUsed\": [\"8\", \"4\", \"10\"], \"cardsUsedCount\": 3}",
+        "verify_info": "\nyou recognized wrong cards",
+        "reward": -1.5
     },
     {
         "prompt": "\n## Task Description\nYou are an expert 24 points card game player. You are observing these four cards in the image.\nNote that 'J', 'Q', and 'K' count as '10'., and each card must be used once.\nYour goal is to output a formula that evaluates to 24 using numbers from the cards and operators such as '+', '-', '*', '/', '(', ')', and '='.\n\n## Output format\nYour response should be a valid JSON file in the following format:\n{\n  \"cards\": [x, y, z, w], where 'J', 'Q', and 'K' count as '10'. Also, omit the suit of the cards.,\n  \"number\": [a, b, c, d], where a, b, c, and d are the numbers on the cards,\n  \"thought\": 'a thought process to build the formula',\n  \"formula\": 'an equation that equals 24',\n}\n\n## Output Example\n{\"cards\": [\"4\", \"3\", \"2\", \"K\"], \"number\": [4, 3, 2, 10], \"formula\": \"4*3+2+10=24\"}\n\nProvide only the JSON.\n\n",
-        "responses": "{\"cards\": [\"A\", \"K\", \"7\", \"8\"], \"number\": [1, 10, 7, 8], \"thought\": \"I need to use the Ace as 1, King as 10, Seven as 7, and Eight as 8. The formula should involve multiplication and addition to reach 24.\", \"formula\": \"10 * (8 - 7) + 1 = 24\"}",
-        "verify_info": "\nillegal characters.",
-        "reward": -3.0
+        "responses": "{\"formula\": \"4*(10-8)\", \"cards\": [\"8\", \"4\", \"10\", \"3\"], \"number\": [8, 4, 10, 3]}",
+        "verify_info": "\nyou recognized wrong cards",
+        "reward": -1.5
     },
     {
         "prompt": "\n## Task Description\nYou are an expert 24 points card game player. You are observing these four cards in the image.\nNote that 'J', 'Q', and 'K' count as '10'., and each card must be used once.\nYour goal is to output a formula that evaluates to 24 using numbers from the cards and operators such as '+', '-', '*', '/', '(', ')', and '='.\n\n## Output format\nYour response should be a valid JSON file in the following format:\n{\n  \"cards\": [x, y, z, w], where 'J', 'Q', and 'K' count as '10'. Also, omit the suit of the cards.,\n  \"number\": [a, b, c, d], where a, b, c, and d are the numbers on the cards,\n  \"thought\": 'a thought process to build the formula',\n  \"formula\": 'an equation that equals 24',\n}\n\n## Output Example\n{\"cards\": [\"4\", \"3\", \"2\", \"K\"], \"number\": [4, 3, 2, 10], \"formula\": \"4*3+2+10=24\"}\n\nProvide only the JSON.\n\n",
-        "responses": "{\"cards\": [\"A\", \"K\", \"7\", \"8\"], \"number\": [1, 10, 7, 8], \"thought\": \"I need to use the Ace as 1, King as 10, Seven as 7, and Eight as 8. The formula should involve multiplication and addition to reach 24.\", \"formula\": \"10 * (8 - 7) + 1 = 24\"}",
-        "verify_info": "\nillegal characters.",
-        "reward": -3.0
+        "responses": "{\"formula\": \"4*(10-8)\", \"cards\": [\"8\", \"4\", \"10\", \"3\"], \"number\": [8, 4, 10, 3]}",
+        "verify_info": "\nyou recognized wrong cards",
+        "reward": -1.5
     },
     {
         "prompt": "\n## Task Description\nYou are an expert 24 points card game player. You are observing these four cards in the image.\nNote that 'J', 'Q', and 'K' count as '10'., and each card must be used once.\nYour goal is to output a formula that evaluates to 24 using numbers from the cards and operators such as '+', '-', '*', '/', '(', ')', and '='.\n\n## Output format\nYour response should be a valid JSON file in the following format:\n{\n  \"cards\": [x, y, z, w], where 'J', 'Q', and 'K' count as '10'. Also, omit the suit of the cards.,\n  \"number\": [a, b, c, d], where a, b, c, and d are the numbers on the cards,\n  \"thought\": 'a thought process to build the formula',\n  \"formula\": 'an equation that equals 24',\n}\n\n## Output Example\n{\"cards\": [\"4\", \"3\", \"2\", \"K\"], \"number\": [4, 3, 2, 10], \"formula\": \"4*3+2+10=24\"}\n\nProvide only the JSON.\n\n",
-        "responses": "{\"cards\": [\"A\", \"K\", \"7\", \"8\"], \"number\": [1, 10, 7, 8], \"thought\": \"I need to use the Ace as 1, King as 10, Seven as 7, and Eight as 8. The formula should involve multiplication and addition to reach 24.\", \"formula\": \"10 * (8 - 7) + 1 = 24\"}",
-        "verify_info": "\nillegal characters.",
-        "reward": -3.0
+        "responses": "{\"formula\": \"8*(10-7)\", \"cards\": [\"7\", \"8\", \"10\", \"4\"]}",
+        "verify_info": "JSON format of number is not correct. Number of recognized numbers is not 4. \nyou didn't use numbers: [4].",
+        "reward": -2.0
     },
     {
         "prompt": "\n## Task Description\nYou are an expert 24 points card game player. You are observing these four cards in the image.\nNote that 'J', 'Q', and 'K' count as '10'., and each card must be used once.\nYour goal is to output a formula that evaluates to 24 using numbers from the cards and operators such as '+', '-', '*', '/', '(', ')', and '='.\n\n## Output format\nYour response should be a valid JSON file in the following format:\n{\n  \"cards\": [x, y, z, w], where 'J', 'Q', and 'K' count as '10'. Also, omit the suit of the cards.,\n  \"number\": [a, b, c, d], where a, b, c, and d are the numbers on the cards,\n  \"thought\": 'a thought process to build the formula',\n  \"formula\": 'an equation that equals 24',\n}\n\n## Output Example\n{\"cards\": [\"4\", \"3\", \"2\", \"K\"], \"number\": [4, 3, 2, 10], \"formula\": \"4*3+2+10=24\"}\n\nProvide only the JSON.\n\n",
-        "responses": "{\"cards\": [\"A\", \"K\", \"7\", \"8\"], \"number\": [1, 10, 7, 8], \"thought\": \"I need to use the Ace as 1, King as 10, Seven as 7, and Eight as 8. The formula should involve multiplication and addition to reach 24.\", \"formula\": \"10 * (8 - 7) + 1 = 24\"}",
-        "verify_info": "\nillegal characters.",
-        "reward": -3.0
+        "responses": "{\"formula\": \"(10+4+8)\", \"cards\": [\"8\", \"4\", \"10\", \"J\"]}",
+        "verify_info": "JSON format of number is not correct. Number of recognized numbers is not 4. \nyou recognized wrong cards",
+        "reward": -1.5
     }
 ]

@@ -161,3 +161,5 @@ card_env/gym_cards/envs/img/*
 card_env/gym_cards/envs/font/*
 
 openrlhf/textgrad/checkpoint/*
+
+.env

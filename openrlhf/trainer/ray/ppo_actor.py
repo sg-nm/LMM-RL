@@ -2047,6 +2047,8 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
     #         leaf_modules = [(n,m) for n,m in leaf_modules if not any([keyword in n for keyword in lora_module_keyword])]
     #     return leaf_modules
 
+    
+    ## NOTE: For Qwen2.5-VL
     def _get_leaf_modules(self, model, use_lora):
         leaf_modules = []
         lora_module_keyword = ["lora_", "base_layer"]
