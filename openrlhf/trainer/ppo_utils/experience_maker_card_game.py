@@ -5,6 +5,7 @@ import math
 import gc
 import traceback
 import re
+import json
 import numpy as np
 import gymnasium as gym
 from datetime import timedelta
@@ -69,6 +70,7 @@ class RolloutStorage:
     action_log_probs: Optional[torch.Tensor] = None
     rewards: Optional[torch.Tensor] = None
     returns: Optional[torch.Tensor] = None
+    prompt: Optional[list[str]] = None
 
     # Optional: Add a method for easy validation
     def __post_init__(self):
@@ -239,9 +241,6 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         for i in range(self.num_envs):
             contents = []
             contents_no_feedback = []
-            # if not (all(len(feedback) == 0 for feedback in previous_feedbacks) or
-            #     all(len(response) == 0 for response in previous_responses) or
-            #     all(len(verify) == 0 for verify in previous_verify_infos)):
             if len(previous_feedbacks[i]) > 0 and len(previous_responses[i]) > 0 and len(previous_verify_infos[i]) > 0:
                 assert len(previous_responses[i]) == len(previous_feedbacks[i]) == len(previous_verify_infos[i]), "The number of previous responses, feedbacks, and verify infos must be the same."
                 if obs_batch[i] is not None:
@@ -330,14 +329,14 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             if (len(previous_responses[i]) == len(previous_verify_infos[i]) == len(previous_feedbacks[i])):
                 assert len(previous_responses[i]) == len(previous_feedbacks[i]) == len(previous_verify_infos[i]), "The number of previous responses, feedbacks, and verify infos must be the same."
                 for idx, (prev_response, prev_feedback, prev_verify_info) in enumerate(zip(previous_responses[i][-self.history_length:], previous_feedbacks[i][-self.history_length:], previous_verify_infos[i][-self.history_length:])):
-                    contents.append({"type": "text", "text": f"\n## Previous model's answer ({self.history_length - idx} steps ago):\n{prev_response}"})
+                    contents.append({"type": "text", "text": f"\n## Previous Model's answer ({self.history_length - idx} steps ago):\n{prev_response}"})
                     contents.append({"type": "text", "text": f"\n## Verification message\nYou failed this trial because {prev_verify_info}"})
                     contents.append({"type": "text", "text": f"\n## Answer examples\ncards: {info_batch['Plain Cards'][i]}, number: {info_batch['Numbers'][i]}, formula: {info_batch['Solution'][i]}"})
                     contents.append({"type": "text", "text": f"\n## Your previous feedback ({self.history_length - idx} steps ago):\n{prev_feedback}"})
             
             elif (len(previous_responses[i]) == len(previous_verify_infos[i])):
                 for idx, (prev_response, prev_verify_info) in enumerate(zip(previous_responses[i][-self.history_length:], previous_verify_infos[i][-self.history_length:])):
-                    contents.append({"type": "text", "text": f"\n## Previous model's answer ({self.history_length - idx} steps ago):\n{prev_response}"})
+                    contents.append({"type": "text", "text": f"\n## Previous Model's answer ({self.history_length - idx} steps ago):\n{prev_response}"})
                     contents.append({"type": "text", "text": f"\n## Verification message\nYou failed this trial because {prev_verify_info}"})
                     contents.append({"type": "text", "text": f"\n## Answer examples\ncards: {info_batch['Plain Cards'][i]}, number: {info_batch['Numbers'][i]}, formula: {info_batch['Solution'][i]}"})
             else:
@@ -379,7 +378,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         return messages
     
     @torch.no_grad()
-    def collect_trajectories(self, **generate_kwargs) -> deque[RolloutStorage]:
+    def collect_trajectories(self, episode_id: int=None, **generate_kwargs) -> deque[RolloutStorage]:
         """
         Rollout the environment and return the experiences.
         """
@@ -403,6 +402,11 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         replay_buffer = deque(maxlen=self.env_config.num_steps + 1)
         episode_start = np.zeros(self.num_envs, dtype=bool)
 
+        
+        if self.strategy.is_rank_0() and self.strategy.args.log:
+            logs = []
+
+        
         for step in tqdm(range(self.env_config.num_steps), desc="Collecting trajectories", disable=not self.strategy.is_rank_0()):
             vision_res_list = [{} for _ in range(self.num_envs)]
             language_res_list = [{} for _ in range(self.num_envs)]
@@ -423,11 +427,15 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             
             # preprocessing the model response to align with json style.
             for i, model_response in enumerate(mini_batch.output_text):
+                # remove <|im_end|> because the env requires a pure json format.
+                if "<|im_end|>" in model_response:
+                    mini_batch.output_text[i] = model_response.replace("<|im_end|>", "")
+                # handle the case that the model provides ```json ...``` format as recent models do.
                 try:
                     match = re.search(self.json_pattern, model_response, re.DOTALL)
                     if match:
                         mini_batch.output_text[i] = match.group(1)
-                except TypeError as e:
+                except:
                     pass
                 
             obs_batch, rewards, terminations, truncations, info_batch = self.envs.step(mini_batch.output_text)
@@ -455,8 +463,8 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             # get feedbacks from teacher model
             # feedbacks = self.get_feedbacks(task_prompt, obs_batch, info_batch, previous_responses, previous_verify_infos, previous_feedbacks, self.multimodal, **generate_kwargs)
             feedbacks = self.get_feedbacks_from_LLMTeacher(task_prompt, info_batch, previous_responses, previous_verify_infos, previous_feedbacks, self.multimodal, **generate_kwargs)
-            if step == 0 and self.strategy.is_rank_0():
-                print(f"Feedbacks: {feedbacks}")
+            # if step == 0 and self.strategy.is_rank_0():
+            #     print(f"Feedbacks: {feedbacks}")
 
             for i, feedback in enumerate(feedbacks):
                 previous_feedbacks[i].append(feedback)
@@ -468,6 +476,26 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
                     previous_feedbacks[i] = []
                     previous_verify_infos[i] = []
 
+
+            if self.strategy.is_rank_0() and self.strategy.args.log:
+                log = {
+                    "step": step,
+                    "prompt": mini_batch.prompt[0],
+                    "model_response": mini_batch.output_text[0],
+                    "verify_info": info_batch["Verify Info"][0],
+                    "feedback": feedbacks[0],
+                    "reward": rewards[0],
+                    "gt_cards": info_batch["Plain Cards"][0],
+                }
+                logs.append(log)
+
+        
+        if self.strategy.is_rank_0() and self.strategy.args.log:
+            log_dir = self.strategy.args.output_log_dir
+            log_file = os.path.join(log_dir, f"episode_{episode_id}.json" if episode_id is not None else "log.json")
+            with open(log_file, "w") as f:
+                json.dump(logs, f, indent=4)
+        
         return replay_buffer
 
     def compute_and_store_returns_in_buffer(self, replay_buffer: Deque[RolloutStorage], gamma: float = 0.9) -> None:
@@ -539,7 +567,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
 
     
     @torch.no_grad()
-    def make_experience_list(self, **generate_kwargs) -> List[Experience_CARDGAME]:
+    def make_experience_list(self, episode_id: int=None, **generate_kwargs) -> List[Experience_CARDGAME]:
         
         if self.strategy.args.perf:
             self.perf_stats = {
@@ -555,7 +583,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             torch.distributed.barrier()
             torch.cuda.synchronize()
 
-        replay_buffer = self.collect_trajectories(**generate_kwargs)
+        replay_buffer = self.collect_trajectories(episode_id, **generate_kwargs)
 
         if self.strategy.args.vllm_enable_sleep:
             batch_vllm_engine_call(self.vllm_engines, "sleep")
@@ -930,6 +958,10 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         action_mask = action_mask.to("cuda")
 
         self.response_length_list.extend(attention_mask.float().sum(dim=-1).tolist())
+
+        # for logging
+        prompt_texts_img_pad_removed = [prompt.replace('<|image_pad|>', '').replace('<|vision_start|>', '<|vision_start|><|image_pad|>') for prompt in prompt_texts]
+
         mini_batch = RolloutStorage(
                         sequences=sequences,
                         attention_mask=attention_mask,
@@ -946,6 +978,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
                         masks=None,
                         bad_masks=None,
                         action_log_probs=None,
+                        prompt=prompt_texts_img_pad_removed,
         )
 
         return mini_batch
@@ -1247,6 +1280,10 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             # visual_inputs.pop("attention_mask")
             # visual_inputs = {k: v.to("cuda") for k, v in visual_inputs.items()} # 'pixel_values', 'image_grid_thw'
             self.response_length_list.extend(attention_mask.float().sum(dim=-1).tolist())
+            
+            # for logging
+            prompt_texts_img_pad_removed = [prompt.replace('<|image_pad|>', '').replace('<|vision_start|>', '<|vision_start|><|image_pad|>') for prompt in feedback_prompts_texts]
+            
             mini_batch = RolloutStorage(
                             sequences=sequences,
                             attention_mask=attention_mask,
@@ -1263,6 +1300,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
                             masks=None,
                             bad_masks=None,
                             action_log_probs=None,
+                            prompt = prompt_texts_img_pad_removed,
             )
         # else:
         #     # NOTE: concat all outputs to following format:

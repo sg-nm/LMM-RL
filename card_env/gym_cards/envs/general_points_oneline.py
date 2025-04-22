@@ -94,7 +94,8 @@ class GeneralPointEnv_oneline(gym.Env):
                  verify_iter=5,
                  ood=False,
                  language_only=False,
-                 face_cards_color='mixed'):
+                 face_cards_color='mixed',
+                 seed=42):
         
         self.target_points = target_points
         self.treat_face_cards_as_10 = treat_face_cards_as_10
@@ -106,7 +107,7 @@ class GeneralPointEnv_oneline(gym.Env):
         self.ood = ood
         self.language_only = language_only
         self.face_cards_color = face_cards_color
-        self.reset()
+        self.reset(seed=seed)
 
     def solve(self, digits: list):
         """
@@ -199,6 +200,8 @@ class GeneralPointEnv_oneline(gym.Env):
             return self._terminate_step(-1, 'step_limit_reached', is_truncated=True)
 
         current_formula = re_match(action, 'formula')
+        # remove spaces in current_formula
+        current_formula = current_formula.replace(" ", "")
         if current_formula == "None":
             verify_info += "JSON format of formula is not correct. "
         recognized_cards = re_match(action, 'cards')
@@ -212,13 +215,13 @@ class GeneralPointEnv_oneline(gym.Env):
             current_formula = current_formula.split('=')[0]
         except:
             pass
-        
+
         recognized_cards = robust_str_to_list(recognized_cards)
         if len(recognized_cards) != 4:
-            verify_info += "Number of recognized cards is not 4. "
+            verify_info += "Number of recognized_cards is not 4. "
         translated_number = robust_str_to_list(translated_number)
         if len(translated_number) != 4:
-            verify_info += "Number of recognized numbers is not 4. "
+            verify_info += "Number of translated_number is not 4. "
 
         reward, verify_info_step_reward = step_rewards(card_nums=self.cards_num, current_formula=current_formula, solutions=self.solution, target_points=self.target_points, \
             recognized_cards=recognized_cards, translated_number=translated_number, gt_cards=self.cards_without_suit, language_only=self.language_only)
@@ -303,3 +306,22 @@ class GeneralPointEnv_oneline(gym.Env):
         # image_array = np.array(canvas)
 
         return canvas
+
+
+
+
+
+if __name__ == "__main__":
+    env = GeneralPointEnv_oneline(treat_face_cards_as_10=True, target_points=24, resolution=1200, show_eqn=True, verify_iter=5, ood=False, language_only=False, face_cards_color='mixed', seed=42)
+    _, info = env.reset()
+    gt_cards = info["Plain Cards"]
+    gt_nums = info["Numbers"]
+
+    cards = gt_cards
+    nums = gt_nums
+    model_response =  "{\n  \"cards\": [\"K\", \"6\", \"8\", \"8\"],\n  \"number\": [10, 6, 8, 8],\n  \"thought\": \"I need to find a way to combine these numbers using the operations to reach 24. I could try adding and subtracting to get a smaller number or find a way to use multiplication and division.\",\n  \"formula\": \"(10 * (8 - 6)) + 8 = 24\"\n}"
+    action = "{\n  \"cards\": " + str(cards) + ",\n  \"number\": " + str(nums) + ",\n  \"formula\": " + "\"(10 * (8 - 6)) + 8 = 24\"" + "\n}"
+    print(f"model_response: {model_response}")
+    print(f"action: {action}")
+    _, _, _, _, info = env.step(action)
+    print(f"info: {info}")

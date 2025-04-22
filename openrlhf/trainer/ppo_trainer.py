@@ -262,7 +262,7 @@ class PPOTrainer(ABC):
                     pbar.update()
                     steps = steps + 1
             else:
-                for i, experience in enumerate(self.experience_maker.make_experience_list(**self.generate_kwargs)):
+                for i, experience in enumerate(self.experience_maker.make_experience_list(episode_id=episode, **self.generate_kwargs)):
                     if i == 0:
                         output = self.tokenizer.batch_decode(experience.sequences[0].unsqueeze(0), skip_special_tokens=True)
                         self.strategy.print(output)
@@ -305,32 +305,13 @@ class PPOTrainer(ABC):
         status_list = []
         status_mean = {}
         for epoch in range(self.max_epochs):
-            pbar = tqdm(
-                dataloader,
-                desc=f"PPO Train epoch [{epoch + 1}/{self.max_epochs}]",
-                disable=not self.strategy.is_rank_0(),
-            )
-            for experience in pbar:
+            if self.strategy.is_rank_0():
+                print(f"PPO Train epoch [{epoch + 1}/{self.max_epochs}]...")
+            # pbar = tqdm(dataloader, desc=f"PPO Train epoch [{epoch + 1}/{self.max_epochs}]", disable=not self.strategy.is_rank_0())
+            for experience in dataloader:
                 experience.to_device(device)
                 status = self.training_step(experience, global_steps)
 
-
-                # engine = self.actor.model  # your DeepSpeedEngine
-                # if engine.is_gradient_accumulation_boundary():
-                #     # offload/cache cleanup if you like…
-                #     if self.strategy.args.deepspeed_enable_sleep:
-                #         self.offload_states()
-                #     torch.cuda.empty_cache()
-
-                #     if self.vllm_engines is not None:
-                #         if self.strategy.args.vllm_enable_sleep:
-                #             self.batch_vllm_engine_call(self.vllm_engines, "wake_up")
-                #         torch.distributed.barrier()
-                #         torch.cuda.synchronize()
-                #         self._broadcast_to_vllm()   # <— now only once per full step
-
-                
-                # for DP
                 # weighted mean for kl
                 if "kl" in status:
                     status["kl"] *= status["response_length"]
@@ -359,7 +340,7 @@ class PPOTrainer(ABC):
                     short_status["ptx"] = status["ptx_loss"]
 
                 status_list.append(status)
-                pbar.set_postfix(short_status)
+                # pbar.set_postfix(short_status)
 
         if status_list:
             status_mean = status_list[0]

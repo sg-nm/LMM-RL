@@ -54,6 +54,12 @@ def _validate_args(args):
 def train(args):
     _validate_args(args)
 
+    if args.log:
+        from datetime import datetime
+        import os
+        args.output_log_dir = os.path.join(args.output_log_dir, f"log_{datetime.now().strftime('%m%d_%H%M%S')}")
+        os.makedirs(args.output_log_dir, exist_ok=True)
+
     # configure strategy
     strategy = get_strategy(args)
 
@@ -212,6 +218,7 @@ def train(args):
         refs.extend(critic_model.async_init_model_from_pretrained(strategy, args.critic_pretrain, max_steps))
         ray.get(refs)
 
+    
     # train actor and critic model
     refs = actor_model.async_fit_actor_model_feedback(
         critic_model, ref_model, reward_models, args.remote_rm_url, reward_fn=reward_fn, vllm_engines=vllm_engines, feedback_model=feedback_model
@@ -463,6 +470,8 @@ if __name__ == "__main__":
     parser.add_argument("--feedback_rewards", type=float, nargs=3, default=(-1.0, 1.0, 2.0), help="Rewards for (degraded, keep, improved) cases")
     parser.add_argument("--env_config", type=str, default=None, help="Environment config file")
     parser.add_argument("--freeze_vision_encoder", action="store_true", default=False)
+    parser.add_argument("--log", action="store_true", default=False)
+    parser.add_argument("--output_log_dir", type=str, default="logs", help="Output log directory")
 
 
     args = parser.parse_args()

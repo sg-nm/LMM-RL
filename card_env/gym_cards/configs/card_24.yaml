@@ -22,7 +22,7 @@ report_to: wandb
 run_name: "card_24"
 num_processes: 1
 num_updates: 20
-num_envs: 32
+num_envs: 64
 env_config:
   id: 'gym_cards/GeneralPoint-oneline-v0'
   target_points: 24
@@ -30,7 +30,7 @@ env_config:
   resolution: 448
   face_cards_color: "black"
   verify_iter: 5
-  num_steps: 8
+  num_steps: 5
 
 eval_env_config:
   id: 'gym_cards/GeneralPoint-oneline-v0'
@@ -39,7 +39,7 @@ eval_env_config:
   resolution: 448
   face_cards_color: "black"
   verify_iter: 5
-  num_evaluations: 7
+  num_evaluations: 1
 
 model: qwen25-vl
 model_path: "Qwen/Qwen2.5-VL-3B-Instruct"

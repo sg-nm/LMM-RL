@@ -24,8 +24,8 @@ Your response should be a valid JSON file in the following format:
 {{
   "cards": [x, y, z, w], where {face_card_msg} Also, omit the suit of the cards.,
   "number": [a, b, c, d], where a, b, c, and d are the numbers on the cards,
-  "thought": 'a thought process to build the formula',
-  "formula": 'an equation that equals {target_number}',
+  "thought": "your step by stepthought process to build the formula",
+  "formula": "an equation that equals {target_number}. Note that the formula must include '='.",
 }}
 
 ## Output Example

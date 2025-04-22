@@ -286,7 +286,7 @@ class NaiveExperienceMaker(ABC):
 
 
     @torch.no_grad()
-    def make_experience_list(self, all_prompts: Union[str, List[str]], all_labels, **generate_kwargs) -> List[Experience]:
+    def make_experience_list(self, all_prompts: Union[str, List[str]], all_labels, episode_id: int=None, **generate_kwargs) -> List[Experience]:
         """
         Make a list of experience with the micro_rollout_batch_size.
 

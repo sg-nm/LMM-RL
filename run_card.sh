@@ -37,7 +37,7 @@ ray job submit --address="http://127.0.0.1:8265" \
    --vllm_sync_backend nccl \
    --vllm_gpu_memory_utilization 0.8 \
    --multimodal \
-   --pretrain Qwen/Qwen2.5-VL-7B-Instruct \
+   --pretrain /home/suganuma/src/QwenVL_sft/output-7B-3/checkpoint-1250 \
    --feedback_model Qwen/Qwen2.5-14B-Instruct \
    --save_path ./openrlhf/textgrad/checkpoint/qwen25-3-7B \
    --micro_train_batch_size $BATCH_SIZE_PER_GPU \
@@ -46,7 +46,7 @@ ray job submit --address="http://127.0.0.1:8265" \
    --rollout_batch_size $BATCH_SIZE_PER_GPU \
    --grad_accum_steps $GRAD_ACCUM_STEPS \
    --n_samples_per_prompt 1 \
-   --max_epochs 4 \
+   --max_epochs 2 \
    --prompt_max_len 4800 \
    --max_samples 100000 \
    --generate_max_len 512 \
@@ -65,16 +65,19 @@ ray job submit --address="http://127.0.0.1:8265" \
    --enable_prefix_caching \
    --env_config /home/suganuma/src/lmm-r1/card_env/gym_cards/configs/card_24.yaml \
    --eps_clip 0.2 \
-   --init_kl_coef 5e-2 \
+   --init_kl_coef 1e-1 \
    --adam_offload \
-   --freeze_vision_encoder \
    --eval \
+   --use_kl_loss \
+   --kl_estimator k3 \
+   --log \
+   --output_log_dir /home/suganuma/src/lmm-r1/openrlhf/textgrad/logs \
    # --freeze_vision_encoder \
-   # --use_kl_loss \
-   # --kl_estimator k3 \
    # --colocate_all_models \
    # --enforce_eager \
    # --vllm_enable_sleep \
    # --deepspeed_enable_sleep \
+   # --pretrain /home/suganuma/src/QwenVL_sft/output-7B-3/checkpoint-1250 \
+   # --pretrain Qwen/Qwen2.5-VL-7B-Instruct \
 
 ray stop --force
