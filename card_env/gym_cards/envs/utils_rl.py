@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass
 from typing import List
 from collections import Counter
-from card_env.gym_cards.envs.utils_general import re_match
+# from card_env.gym_cards.envs.utils_general import re_match
 """
 Naive reward function and step verifier for p24
 """
@@ -19,6 +19,11 @@ REWARD_FN = {
     "INCORRECT_VISION": -1.5,
     "INCORRECT_NUMBER": -2,
     "ILLEGAL_FORMULA": -3,
+    "CORRECT_JSON": 0.25,
+    "PARTIAL_JSON": 0.1,
+    "INCORRECT_JSON": -1,
+    "CORRECT_LIST": 0.1,
+    "INCORRECT_LIST": -0.5,
 }
 
 def aggregate_fn(message_list):
@@ -177,12 +182,15 @@ def step_rewards(card_nums: list,
     
     # print(recognized_cards, translated_number, gt_cards, card_nums)
     if not language_only:
-        sorted_card_nums = sorted(card_nums)
-        sorted_recognized_cards = sorted(recognized_cards)
-        sorted_translated_number = sorted(translated_number)
-        sorted_gt_cards = sorted(gt_cards)
-        if sorted_gt_cards != sorted_recognized_cards:
-            return REWARD_FN["INCORRECT_VISION"], "you recognized wrong cards"
+        try:
+            sorted_card_nums = sorted(card_nums)
+            sorted_recognized_cards = sorted(recognized_cards)
+            sorted_translated_number = sorted(translated_number)
+            sorted_gt_cards = sorted(gt_cards)
+            if sorted_gt_cards != sorted_recognized_cards:
+                return REWARD_FN["INCORRECT_VISION"], "you recognized wrong cards"
+        except:
+            return REWARD_FN["INCORRECT_VISION"], "you recognized numbers incorrectly"
     # assert False
     # Function to get token type
     def get_token_type(token):
@@ -333,32 +341,32 @@ REWARD_FN_VIRL = {
     "INCORRECT_INSTRUCTION": -1.75,
 }
 
-def step_rewards_virl(raw_output: str, gt_action: str, gt_obs: str, gt_instruction: str):
-    stepper = StepResult(0, [])
-    output_action  = re_match(raw_output, "action")
-    output_obs = re_match(raw_output, "current observation")
-    output_instruction = re_match(raw_output, "current instruction")
+# def step_rewards_virl(raw_output: str, gt_action: str, gt_obs: str, gt_instruction: str):
+#     stepper = StepResult(0, [])
+#     output_action  = re_match(raw_output, "action")
+#     output_obs = re_match(raw_output, "current observation")
+#     output_instruction = re_match(raw_output, "current instruction")
 
-    format_token = """
-[Output]
-{{
-  "current observation": latest observation from the streetview grid,
-  "current instruction": analyze the full instruction and identify the sentence to be executed,
-  "action": the action to be taken chosen from the action space,
-}}"""
-    if output_action == gt_action:
-        stepper.add(REWARD_FN_VIRL["CORRECT_ACTION"], "Correct action")
-        return stepper
-    else:
-        if ('intersection' in output_obs) and ('intersection' not in gt_obs):
-            stepper.add(REWARD_FN_VIRL["INCORRECT_OBS"], "you are not at any intersection. Please avoid this observation and try again in the same format:" + format_token)
-            return stepper
-        elif ('intersection' not in output_obs) and ('intersection' in gt_obs):
-            stepper.add(REWARD_FN_VIRL["INCORRECT_OBS"], "you are at an intersection. Please avoid this observation and try again in the same format:" + format_token)
-            return stepper
-        stepper.add(REWARD_FN_VIRL["INCORRECT_ACTION"], "you make incorrect action. Please avoid this action and try again in the same format:" + format_token)
+#     format_token = """
+# [Output]
+# {{
+#   "current observation": latest observation from the streetview grid,
+#   "current instruction": analyze the full instruction and identify the sentence to be executed,
+#   "action": the action to be taken chosen from the action space,
+# }}"""
+#     if output_action == gt_action:
+#         stepper.add(REWARD_FN_VIRL["CORRECT_ACTION"], "Correct action")
+#         return stepper
+#     else:
+#         if ('intersection' in output_obs) and ('intersection' not in gt_obs):
+#             stepper.add(REWARD_FN_VIRL["INCORRECT_OBS"], "you are not at any intersection. Please avoid this observation and try again in the same format:" + format_token)
+#             return stepper
+#         elif ('intersection' not in output_obs) and ('intersection' in gt_obs):
+#             stepper.add(REWARD_FN_VIRL["INCORRECT_OBS"], "you are at an intersection. Please avoid this observation and try again in the same format:" + format_token)
+#             return stepper
+#         stepper.add(REWARD_FN_VIRL["INCORRECT_ACTION"], "you make incorrect action. Please avoid this action and try again in the same format:" + format_token)
         
-    return stepper
+#     return stepper
 
 if __name__ == "__main__":
     # test step_rewards

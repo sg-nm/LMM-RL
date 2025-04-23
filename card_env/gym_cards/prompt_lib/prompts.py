@@ -17,22 +17,21 @@ Q_GeneralPoint_EQN_VL = """
 ## Task Description
 You are an expert {target_number} points card game player. You are observing these four cards in the image.
 Note that {face_card_msg}, and each card must be used once.
-Your goal is to output a formula that evaluates to {target_number} using numbers from the cards and operators such as '+', '-', '*', '/', '(', ')', and '='.
+Your goal is to find a formula that evaluates to {target_number} using numbers from the cards and operators such as '+', '-', '*', '/', '(', ')', and '='.
 
 ## Output format
 Your response should be a valid JSON file in the following format:
 {{
   "cards": [x, y, z, w], where {face_card_msg} Also, omit the suit of the cards.,
   "number": [a, b, c, d], where a, b, c, and d are the numbers on the cards,
-  "thought": "your step by stepthought process to build the formula",
+  "thought": "your step by step thought process to build the formula",
   "formula": "an equation that equals {target_number}. Note that the formula must include '='.",
 }}
 
 ## Output Example
 {example_json_text}
 
-Provide only the JSON.
-
+Please only output the json.
 """
 
 Q_GeneralPoint_EQN_L = """

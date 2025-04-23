@@ -1641,6 +1641,7 @@ class ActorModelRayActor_Card(BasePPORole):
         self.configs = load_config_from_yaml(args.env_config)
         self.action_space = []
         self.num_envs = self.configs.num_envs
+        self.num_eval_envs = self.configs.num_eval_envs
         self.num_steps = self.configs.env_config.num_steps
         self.num_updates = self.configs.num_updates
         self.compute_return_kwargs = self.configs.compute_return_kwargs
@@ -1660,7 +1661,7 @@ class ActorModelRayActor_Card(BasePPORole):
 
         if args.eval:
             try:
-                env_fns = [make_env(self.configs.eval_env_config, language_only=self.configs.prompt_config.use_language, seed=args.seed + 10*(idx+1)) for idx in range(self.num_envs)]
+                env_fns = [make_env(self.configs.eval_env_config, language_only=self.configs.prompt_config.use_language, seed=args.seed + 10*(idx+1)) for idx in range(self.num_eval_envs)]
                 self.eval_envs = gym.vector.AsyncVectorEnv(env_fns, autoreset_mode=gym.vector.AutoresetMode.NEXT_STEP)
                 print("Eval environments created.")
             except Exception as e:
@@ -1934,7 +1935,7 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
             torch.distributed.barrier()
             torch.cuda.synchronize()
 
-        if (global_steps == 0 or global_steps == 1) and self.strategy.args.eval:
+        if global_steps == 0 and self.strategy.args.eval:
             success_rate = self.evaluate()
             if self.strategy.is_rank_0():
                 print(f"Init eval success rate: {success_rate}")
@@ -2001,7 +2002,7 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
         torch.distributed.barrier()
 
         # 6. evaluate
-        if self.strategy.args.eval:
+        if self.strategy.args.eval and global_steps % 2 == 0:
             if self.strategy.args.vllm_enable_sleep:
                 from openrlhf.trainer.ray.vllm_engine import batch_vllm_engine_call
                 batch_vllm_engine_call(self.vllm_engines, "wake_up")
@@ -2397,6 +2398,8 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
         offload_deepspeed_states(self.actor.model)
 
     def evaluate(self):
+        if self.strategy.is_rank_0():
+            print("Evaluating...")
         self.actor.eval()
         from vllm import SamplingParams
         self.response_length_list = []
@@ -2506,12 +2509,18 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
 
                 # preprocessing the model response to align with json style.
                 for i, model_response in enumerate(full_responses):
+                    if model_response is None:
+                        continue
+                    if "<|im_end|>" in model_response:
+                        model_response = model_response.replace("<|im_end|>", "")
                     try:
                         match = re.search(json_pattern, model_response, re.DOTALL)
                     except TypeError as e:
                         pass
                     if match:
                         full_responses[i] = match.group(1)
+                    else:
+                        full_responses[i] = model_response
                 obs_batch, rewards, terminations, truncations, info_batch = self.eval_envs.step(full_responses)
                 done = np.logical_or(terminations, truncations)
 

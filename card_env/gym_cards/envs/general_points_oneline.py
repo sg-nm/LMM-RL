@@ -199,15 +199,18 @@ class GeneralPointEnv_oneline(gym.Env):
         if self.remaining_step == -1:
             return self._terminate_step(-1, 'step_limit_reached', is_truncated=True)
 
-        current_formula = re_match(action, 'formula')
+        current_formula, reward_json_formula = re_match(action, 'formula')
         # remove spaces in current_formula
-        current_formula = current_formula.replace(" ", "")
+        if current_formula is not None and isinstance(current_formula, str):
+            current_formula = current_formula.replace(" ", "")
+        else:
+            current_formula = "None"
         if current_formula == "None":
             verify_info += "JSON format of formula is not correct. "
-        recognized_cards = re_match(action, 'cards')
+        recognized_cards, reward_json_cards = re_match(action, 'cards')
         if recognized_cards == "None":
             verify_info += "JSON format of cards is not correct. "
-        translated_number = re_match(action, 'number')
+        translated_number, reward_json_number = re_match(action, 'number')
         if translated_number == "None":
             verify_info += "JSON format of number is not correct. "
         
@@ -219,15 +222,23 @@ class GeneralPointEnv_oneline(gym.Env):
         recognized_cards = robust_str_to_list(recognized_cards)
         if len(recognized_cards) != 4:
             verify_info += "Number of recognized_cards is not 4. "
+            reward_list_cards = REWARD_FN["INCORRECT_LIST"]
+        else:
+            reward_list_cards = REWARD_FN["CORRECT_LIST"]
         translated_number = robust_str_to_list(translated_number)
         if len(translated_number) != 4:
             verify_info += "Number of translated_number is not 4. "
+            reward_list_number = REWARD_FN["INCORRECT_LIST"]
+        else:
+            reward_list_number = REWARD_FN["CORRECT_LIST"]
 
         reward, verify_info_step_reward = step_rewards(card_nums=self.cards_num, current_formula=current_formula, solutions=self.solution, target_points=self.target_points, \
             recognized_cards=recognized_cards, translated_number=translated_number, gt_cards=self.cards_without_suit, language_only=self.language_only)
         self.verify_info = verify_info + "\n" + verify_info_step_reward
 
-        if reward == max(REWARD_FN.values()):
+        reward = reward + reward_json_formula + reward_json_cards + reward_json_number + reward_list_cards + reward_list_number
+
+        if reward >= max(REWARD_FN.values()):
             terminated = True
         info = {"Cards": self.cards, "Plain Cards": self.cards_without_suit,
                 "Numbers": self.cards_num, "Formula": self.formula,

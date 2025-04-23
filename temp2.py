@@ -34,7 +34,8 @@ def transform_json_format(input_data):
                 },
                 {
                     "from": "gpt",
-                    "value": answer
+                    "value": answer.replace("\"}", "=24\"}")
+                    # "value": answer
                 }
             ]
         }
@@ -65,6 +66,8 @@ def transform_json_file(input_filepath, output_filepath):
             original_data = json.load(infile)
 
         transformed_data = transform_json_format(original_data)
+        print(f"変換前のデータ数: {len(original_data)}")
+        print(f"変換後のデータ数: {len(transformed_data)}")
 
         with open(output_filepath, 'w', encoding='utf-8') as outfile:
             json.dump(transformed_data, outfile, indent=4, ensure_ascii=False)
@@ -82,6 +85,6 @@ def transform_json_file(input_filepath, output_filepath):
 
 
 # # 使用例：
-input_file = '/home/suganuma/datasets/card_24/sft/train/sft_data.json'   # 元のJSONファイル名
-output_file = '/home/suganuma/datasets/card_24/sft/train/sft_data_conv.json' # 出力するJSONファイル名
+input_file = '/home/suganuma/datasets/card_24/sft/train_v2/sft_data.json'   # 元のJSONファイル名
+output_file = '/home/suganuma/datasets/card_24/sft/train_v2/sft_data_conv.json' # 出力するJSONファイル名
 transform_json_file(input_file, output_file) # この行を実行するには、input.jsonファイルが必要です。

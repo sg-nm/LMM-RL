@@ -19,7 +19,7 @@ import torch
 import numpy as np
 import random
 from tqdm import tqdm
-import transformers
+from .utils_rl import REWARD_FN
 """
 Init seed
 """
@@ -185,6 +185,7 @@ def re_match(text: str, pattern: str):
         if pattern == 'cards':
             pred = [card.replace('\"', '') for card in pred]
 
+        reward = REWARD_FN["CORRECT_JSON"]
         # # propcocessing
         # if not isinstance(pred, str):
         #     pred = str(pred)
@@ -200,10 +201,13 @@ def re_match(text: str, pattern: str):
                 except:
                     pred = '[' + pred + ']'
 
+            reward = REWARD_FN["PARTIAL_JSON"]
+
         except:
             pred = "None"
+            reward = REWARD_FN["INCORRECT_JSON"]
     
-    return pred
+    return pred, reward
 
 def robust_str_to_list(list_like_str: Union[str, list]):
     try:

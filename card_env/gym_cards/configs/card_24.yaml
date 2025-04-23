@@ -22,7 +22,8 @@ report_to: wandb
 run_name: "card_24"
 num_processes: 1
 num_updates: 20
-num_envs: 64
+num_envs: 128
+num_eval_envs: 52
 env_config:
   id: 'gym_cards/GeneralPoint-oneline-v0'
   target_points: 24

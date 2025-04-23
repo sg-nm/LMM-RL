@@ -450,6 +450,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             bad_masks_tensor = 1.0 - truncations_tensor.float()
 
             mini_batch.rewards = rewards_tensor     # Shape: (num_envs,)
+            mini_batch.returns = rewards_tensor
             mini_batch.masks = masks_tensor         # Shape: (num_envs,)
             mini_batch.bad_masks = bad_masks_tensor # Shape: (num_envs,)
 
@@ -592,8 +593,8 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         torch.distributed.barrier()
         torch.cuda.synchronize()
 
-        # compute cumulative returns
-        self.compute_and_store_returns_in_buffer(replay_buffer, generate_kwargs["gamma"])
+        # # compute cumulative returns
+        # self.compute_and_store_returns_in_buffer(replay_buffer, generate_kwargs["gamma"])
 
         all_experiences = []
         for mini_batch in tqdm(replay_buffer, total=len(replay_buffer), desc="make_experience", disable=not self.strategy.is_rank_0()):
