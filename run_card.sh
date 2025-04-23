@@ -13,7 +13,7 @@ set -x
 
 export ACTOR_NUM_GPUS=4
 export BATCH_SIZE_PER_GPU=4
-export GRAD_ACCUM_STEPS=8
+export GRAD_ACCUM_STEPS=16
 export GLOBAL_BATCH_SIZE=$((ACTOR_NUM_GPUS * BATCH_SIZE_PER_GPU * GRAD_ACCUM_STEPS))
 # export GLOBAL_BATCH_SIZE=$((ACTOR_NUM_GPUS * BATCH_SIZE_PER_GPU))
 
@@ -37,7 +37,7 @@ ray job submit --address="http://127.0.0.1:8265" \
    --vllm_sync_backend nccl \
    --vllm_gpu_memory_utilization 0.8 \
    --multimodal \
-   --pretrain /home/suganuma/src/QwenVL_sft/output-7B-4/checkpoint-3750 \
+   --pretrain /home/suganuma/src/QwenVL_sft/output-7B_v2/checkpoint-2500 \
    --feedback_model Qwen/Qwen2.5-14B-Instruct \
    --save_path ./openrlhf/textgrad/checkpoint/qwen25-3-7B \
    --micro_train_batch_size $BATCH_SIZE_PER_GPU \
@@ -72,6 +72,7 @@ ray job submit --address="http://127.0.0.1:8265" \
    --kl_estimator k3 \
    --log \
    --output_log_dir /home/suganuma/src/lmm-r1/openrlhf/textgrad/logs \
+   --seed 4 \
    # --freeze_vision_encoder \
    # --colocate_all_models \
    # --enforce_eager \

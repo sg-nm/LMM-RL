@@ -2538,7 +2538,7 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
                     if done[idx]:
                         active_envs[idx] = False
                         total += 1
-                        if episode_rewards[idx] > 4:
+                        if episode_rewards[idx] >= 5 or "Correct solution" in info_batch["Verify Info"][idx]:
                             success += 1
 
                 # 最初のTrialでEnv0のログを保存

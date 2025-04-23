@@ -107,9 +107,9 @@ Please reason step by step, and put your final answer within \\boxed{{}}.
 
 ## Prompt for base model to generate responses with feedbacks
 FEEDBACK_PROMPT_BASE_CARD = """Your task is to solve the following problem. Unfortunately, your previous answers are incorrect or can be improved. 
-Please generate a new answer based on your previous answers and the feedbacks from another model below.
+Please generate a new answer by CAREFULLY considering the feedbacks from another model below.
 Please DO NOT include any explicit references to the feedback in your response (e.g., “As another model pointed out XX ...”, “The feedback says ...”).
-You should use the feedback to generate a new answer, but act as if you have not seen the feedback.
+You should utilize the feedback to provide a correct answer, but act as if you have not seen the feedback.
 
 {task}
 """

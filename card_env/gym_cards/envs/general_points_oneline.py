@@ -234,7 +234,11 @@ class GeneralPointEnv_oneline(gym.Env):
 
         reward, verify_info_step_reward = step_rewards(card_nums=self.cards_num, current_formula=current_formula, solutions=self.solution, target_points=self.target_points, \
             recognized_cards=recognized_cards, translated_number=translated_number, gt_cards=self.cards_without_suit, language_only=self.language_only)
-        self.verify_info = verify_info + "\n" + verify_info_step_reward
+        
+        if verify_info_step_reward is None:
+            verify_info_step_reward = "Something is wrong"
+            reward = -1.0
+        self.verify_info = verify_info + verify_info_step_reward
 
         reward = reward + reward_json_formula + reward_json_cards + reward_json_number + reward_list_cards + reward_list_number
 
