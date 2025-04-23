@@ -12,14 +12,14 @@ Last edited by Tianzhe
 import yaml
 from box import Box
 import argparse
-from typing import Dict
+from typing import Dict, Union
 import re
 import json
 import torch
 import numpy as np
 import random
 from tqdm import tqdm
-import transformers
+from .utils_rl import REWARD_FN
 """
 Init seed
 """
@@ -181,8 +181,12 @@ def re_match(text: str, pattern: str):
     try:
         output_dict = json.loads(text)
         pred = output_dict[pattern]
-        if not isinstance(pred, str):
-            pred = str(pred)
+
+        if pattern == 'cards':
+            pred = [card.replace('\"', '') for card in pred]
+
+        reward = REWARD_FN["CORRECT_JSON"]
+
     except:
         try:
             pattern_re = re.search(RE_PATTERN_DICT[pattern], text)
@@ -194,17 +198,24 @@ def re_match(text: str, pattern: str):
                     pred = list(map(int, pattern_re.group(1).split(', ')))
                 except:
                     pred = '[' + pred + ']'
-            
+
+            reward = REWARD_FN["PARTIAL_JSON"]
+
         except:
             pred = "None"
+            reward = REWARD_FN["INCORRECT_JSON"]
     
-    return pred
+    return pred, reward
 
-def robust_str_to_list(list_like_str: str):
+def robust_str_to_list(list_like_str: Union[str, list]):
     try:
-        list_like_str = list_like_str.replace('[', '').replace(']', '').replace('\'', '').replace(' ', '').split(',')
-        assert len(list_like_str) == 4
-    except:
+        if isinstance(list_like_str, list):
+            processed_list_like_str = [card.replace('\"', '') if isinstance(card, str) else card for card in list_like_str]
+            return processed_list_like_str
+        else:
+            list_like_str = list_like_str.replace('[', '').replace(']', '').replace('\'', '').replace(' ', '').split(',')
+            assert len(list_like_str) == 4
+    except Exception as e:
         list_like_str = []
     return list_like_str
 

@@ -81,6 +81,7 @@ class BasePPORole(DistributedTorchRayActor):
 
         # Verify all parameters have same length
         for param_name, param_value in kwargs.items():
+            # print(f"Parameter {param_name}")
             if len(param_value) != list_length:
                 raise ValueError(f"Parameter {param_name} has length {len(param_value)}, expected {list_length}")
 

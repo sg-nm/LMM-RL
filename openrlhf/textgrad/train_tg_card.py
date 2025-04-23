@@ -54,12 +54,18 @@ def _validate_args(args):
 def train(args):
     _validate_args(args)
 
+    if args.log:
+        from datetime import datetime
+        import os
+        args.output_log_dir = os.path.join(args.output_log_dir, f"log_{datetime.now().strftime('%m%d_%H%M%S')}")
+        os.makedirs(args.output_log_dir, exist_ok=True)
+
     # configure strategy
     strategy = get_strategy(args)
 
     # if colocated, create placement group for actor and ref model explicitly.
     pg = None
-    if args.colocate_actor_ref or args.colocate_all_models:
+    if args.colocate_actor_ref or args.colocate_all_models or args.colocate_actor_vllm:
         if args.init_kl_coef > 0:
             assert (
                 args.actor_num_nodes == args.ref_num_nodes
@@ -74,7 +80,16 @@ def train(args):
     vllm_engines = None
     if args.vllm_num_engines is not None and args.vllm_num_engines > 0:
         max_len = args.max_len if args.max_len else args.prompt_max_len + args.generate_max_len
-        if args.colocate_all_models:
+        # if args.colocate_all_models:
+        #     assert (
+        #         args.actor_num_nodes * args.actor_num_gpus_per_node
+        #         == args.vllm_num_engines * args.vllm_tensor_parallel_size
+        #     ), (
+        #         f"actor_num_nodes * actor_num_gpus_per_node must be equal to "
+        #         f"vllm_num_engines * vllm_tensor_parallel_size, got {args.actor_num_nodes * args.actor_num_gpus_per_node} "
+        #         f"and {args.vllm_num_engines * args.vllm_tensor_parallel_size}"
+        #     )
+        if args.colocate_actor_vllm:
             assert (
                 args.actor_num_nodes * args.actor_num_gpus_per_node
                 == args.vllm_num_engines * args.vllm_tensor_parallel_size
@@ -93,7 +108,7 @@ def train(args):
             args.enforce_eager,
             max_len,
             args.actor_num_nodes * args.actor_num_gpus_per_node // args.ring_attn_size,
-            pg if args.colocate_all_models else None,
+            pg if args.colocate_all_models or args.colocate_actor_vllm else None,
             args.vllm_gpu_memory_utilization,
             args.vllm_enable_sleep,
         )
@@ -212,6 +227,7 @@ def train(args):
         refs.extend(critic_model.async_init_model_from_pretrained(strategy, args.critic_pretrain, max_steps))
         ray.get(refs)
 
+    
     # train actor and critic model
     refs = actor_model.async_fit_actor_model_feedback(
         critic_model, ref_model, reward_models, args.remote_rm_url, reward_fn=reward_fn, vllm_engines=vllm_engines, feedback_model=feedback_model
@@ -463,6 +479,9 @@ if __name__ == "__main__":
     parser.add_argument("--feedback_rewards", type=float, nargs=3, default=(-1.0, 1.0, 2.0), help="Rewards for (degraded, keep, improved) cases")
     parser.add_argument("--env_config", type=str, default=None, help="Environment config file")
     parser.add_argument("--freeze_vision_encoder", action="store_true", default=False)
+    parser.add_argument("--log", action="store_true", default=False)
+    parser.add_argument("--output_log_dir", type=str, default="logs", help="Output log directory")
+    parser.add_argument("--colocate_actor_vllm", action="store_true", default=False)
 
 
     args = parser.parse_args()

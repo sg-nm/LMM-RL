@@ -51,6 +51,12 @@ class LLMRayActor:
         self.requests = {}
         self.response_queues = defaultdict(queue.Queue)
 
+        full_determinism = kwargs.pop("full_determinism", False)
+        import vllm
+        if full_determinism or vllm.__version__ == "0.8.2":
+            # https://github.com/vllm-project/vllm/blob/effc5d24fae10b29996256eb7a88668ff7941aed/examples/offline_inference/reproduciblity.py#L11
+            os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
+
         self.llm = LLM(*args, **kwargs)
 
     def init_process_group(self, master_address, master_port, rank_offset, world_size, group_name, backend, use_ray):

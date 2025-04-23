@@ -49,10 +49,11 @@ from card_env.gym_cards.config_dataclass import EnvConfig, PromptConfig, load_co
 from card_env.gym_cards.envs.general_points_oneline import GeneralPointEnv_oneline
 
 
-def make_env(env_config: Union[EnvConfig, EvalEnvConfig], language_only=False):
+def make_env(env_config: Union[EnvConfig, EvalEnvConfig], language_only=False, seed=42):
     def _init():
         config_dict = {k: v for k, v in vars(env_config).items() if k != "id" and k != "num_steps" and k != "num_evaluations"}
         config_dict["language_only"] = language_only
+        config_dict["seed"] = seed
         return GeneralPointEnv_oneline(**config_dict)
         # env = GeneralPointEnv_oneline(**vars(env_config), language_only=language_only)
         # return env
@@ -97,7 +98,7 @@ class ActorPPOTrainer(PPOTrainer):
 
         backend = getattr(self.strategy.args, "vllm_sync_backend", "nccl")
         self.use_cuda_ipc = False
-        if backend == "nccl" and self.strategy.args.colocate_all_models:
+        if backend == "nccl" and (self.strategy.args.colocate_all_models or self.strategy.args.colocate_actor_vllm):
             self.use_cuda_ipc = True
 
         # Create torch group with deepspeed rank 0 and all vllm ranks
@@ -1643,7 +1644,7 @@ class ActorModelRayActor_Card(BasePPORole):
         self.num_steps = self.configs.env_config.num_steps
         self.num_updates = self.configs.num_updates
         self.compute_return_kwargs = self.configs.compute_return_kwargs
-        env_fns = [make_env(self.configs.env_config, language_only=self.configs.prompt_config.use_language) for _ in range(self.num_envs)]
+        env_fns = [make_env(self.configs.env_config, language_only=self.configs.prompt_config.use_language, seed=args.seed + idx) for idx in range(self.num_envs)]
         self.envs = None
         self.eval_envs = None
         try:
@@ -1659,7 +1660,7 @@ class ActorModelRayActor_Card(BasePPORole):
 
         if args.eval:
             try:
-                env_fns = [make_env(self.configs.eval_env_config, language_only=self.configs.prompt_config.use_language) for _ in range(self.num_envs)]
+                env_fns = [make_env(self.configs.eval_env_config, language_only=self.configs.prompt_config.use_language, seed=args.seed + 10*(idx+1)) for idx in range(self.num_envs)]
                 self.eval_envs = gym.vector.AsyncVectorEnv(env_fns, autoreset_mode=gym.vector.AutoresetMode.NEXT_STEP)
                 print("Eval environments created.")
             except Exception as e:
@@ -1965,7 +1966,7 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
             if self.strategy.args.deepspeed_enable_sleep:
                 ray.get(self.critic.offload_states.remote())
 
-        if self.strategy.args.colocate_all_models:
+        if self.strategy.args.colocate_all_models or self.strategy.args.colocate_actor_vllm:
             torch.distributed.barrier()
 
         # 3. actor model training
@@ -2396,6 +2397,8 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
         offload_deepspeed_states(self.actor.model)
 
     def evaluate(self):
+        if self.strategy.is_rank_0():
+            print("Evaluating...")
         self.actor.eval()
         from vllm import SamplingParams
         self.response_length_list = []
@@ -2505,12 +2508,18 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
 
                 # preprocessing the model response to align with json style.
                 for i, model_response in enumerate(full_responses):
+                    if model_response is None:
+                        continue
+                    if "<|im_end|>" in model_response:
+                        model_response = model_response.replace("<|im_end|>", "")
                     try:
                         match = re.search(json_pattern, model_response, re.DOTALL)
                     except TypeError as e:
                         pass
                     if match:
                         full_responses[i] = match.group(1)
+                    else:
+                        full_responses[i] = model_response
                 obs_batch, rewards, terminations, truncations, info_batch = self.eval_envs.step(full_responses)
                 done = np.logical_or(terminations, truncations)
 
@@ -2542,14 +2551,25 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
                     responses.append(log)
 
             # 最初のTrialの結果をファイル出力
-            if t == 0:
-                with open("/home/suganuma/src/lmm-r1/card24_results/log.json", "w") as f:
+            if t == 0 and self.strategy.is_rank_0():
+                with open("/home/msuganuma_sakana_ai/src/lmm-r1/card24_results/log.json", "w") as f:
                     json.dump(responses, f, indent=4)
-                image.save("/home/suganuma/src/lmm-r1/card24_results/image.png")
+                image.save("/home/msuganuma_sakana_ai/src/lmm-r1/card24_results/image.png")
 
-        success_rate = success / total if total > 0 else 0
+        
+        # success_rate = success / total if total > 0 else 0
+
+        # Convert to tensors and move to CUDA
+        correct_tensor = torch.tensor(success, device="cuda", dtype=torch.float)
+        total_tensor = torch.tensor(total, device="cuda", dtype=torch.float)
+        # All-reduce across all processes
+        torch.distributed.all_reduce(correct_tensor, op=torch.distributed.ReduceOp.SUM)
+        torch.distributed.all_reduce(total_tensor, op=torch.distributed.ReduceOp.SUM)
+        success_rate = correct_tensor.item() / total_tensor.item() if total_tensor.item() > 0 else 0
+
         if self.strategy.is_rank_0():
-            print(f"Success Rate: {success_rate}")
+            print(f"Evaluate Accuracy (avg over all ranks): {success_rate:.4f}")
+            
         return success_rate
 
     
