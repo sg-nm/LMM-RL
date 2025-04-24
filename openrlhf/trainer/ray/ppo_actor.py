@@ -39,8 +39,7 @@ from peft.peft_model import PeftModel
 from .launcher import BasePPORole
 from .utils import get_physical_gpu_id
 
-from openrlhf.trainer.ppo_utils.experience_maker_card_game import RemoteExperienceMaker_CardGame
-# from gui_env.robust_parallel_desktop_env import ParallelDesktopEnv
+from openrlhf.trainer.ppo_utils.experience_maker_card_game import RemoteExperienceMaker_CardGame, RemoteExperienceMaker_CardGame_REINFORCE
 from openrlhf.textgrad.custom_reward_functions import check_answer_commonsense_qa, check_answer_math
 from openrlhf.trainer.ppo_utils.replay_buffer import ReplayBuffer_CARDGAME
 
@@ -1537,8 +1536,6 @@ class ActorModelRayActor_Card(BasePPORole):
                 use_liger_kernel=strategy.args.use_liger_kernel,
             )
 
-        # strategy.print(actor)
-
         # Support freeze some parameter
         if hasattr(strategy.args, "freeze_prefix") and strategy.args.freeze_prefix:
             frozen_count = 0
@@ -1554,9 +1551,8 @@ class ActorModelRayActor_Card(BasePPORole):
             min_pixels = 256*28*28
             max_pixels = 1280*28*28
             self.data_processor = AutoProcessor.from_pretrained(pretrain, padding_side="left", min_pixels=min_pixels, max_pixels=max_pixels)
-            # self.data_processor = get_data_processor(pretrain, actor.model, "left", strategy, use_fast=not strategy.args.disable_fast_tokenizer)
         else:
-            self.data_processor = None
+            self.data_processor = AutoProcessor.from_pretrained(pretrain, padding_side="left", min_pixels=min_pixels, max_pixels=max_pixels)
         self.tokenizer = get_tokenizer(pretrain, actor.model, "left", strategy, use_fast=not strategy.args.disable_fast_tokenizer)
 
         if args.enable_ema:
@@ -1581,14 +1577,6 @@ class ActorModelRayActor_Card(BasePPORole):
 
         # configure scheduler
         self.num_update_steps_per_episodes = (self.num_steps * self.num_envs * args.max_epochs // args.train_batch_size)
-        # num_rollouts_per_episodes = (
-        #     self.num_update_steps_per_episodes
-        #     * args.train_batch_size
-        #     // args.max_epochs
-        #     // args.rollout_batch_size
-        #     // args.n_samples_per_prompt
-        # )
-        # assert num_rollouts_per_episodes != 0, f"num_rollouts_per_episodes is 0. {args.train_batch_size}, {args.max_epochs}, {args.rollout_batch_size}, {args.n_samples_per_prompt}"
 
         max_steps = math.ceil(args.num_episodes * self.num_update_steps_per_episodes)
         self._max_steps = max_steps
@@ -1651,8 +1639,8 @@ class ActorModelRayActor_Card(BasePPORole):
         try:
             print(f"Creating {self.num_envs} parallel environments...")
             # context="spawn" is often more robust, especially on Windows/macOS
-            # self.envs = gym.vector.AsyncVectorEnv(env_fns, context="spawn", autoreset_mode=gym.vector.AutoresetMode.NEXT_STEP)
-            self.envs = gym.vector.AsyncVectorEnv(env_fns, autoreset_mode=gym.vector.AutoresetMode.NEXT_STEP)
+            self.envs = gym.vector.AsyncVectorEnv(env_fns, autoreset_mode=gym.vector.AutoresetMode.SAME_STEP)
+            # self.envs = gym.vector.AsyncVectorEnv(env_fns, autoreset_mode=gym.vector.AutoresetMode.NEXT_STEP)
             print("Environments created.")
         except Exception as e:
             print(f"\nAn error occurred: {e}")
@@ -1851,27 +1839,49 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
             multimodal=self.strategy.args.multimodal,
         )
 
-        self.experience_maker = RemoteExperienceMaker_CardGame(
-            actor=self.actor,
-            critic=self.critic,
-            reward_model=self.reward_model,
-            initial_model=self.initial_model,
-            tokenizer=self.tokenizer,
-            data_processor=self.data_processor,
-            prompt_max_len=self.prompt_max_len,
-            kl_controller=self.kl_ctl,
-            strategy=self.strategy,
-            remote_rm_url=self.remote_rm_url,
-            reward_fn=self.reward_fn,
-            vllm_engines=self.vllm_engines,
-            feedback_model=self.feedback_model,
-            packing_samples=self.strategy.args.packing_samples,
-            multimodal=self.strategy.args.multimodal,
-            feedback_rewards=self.strategy.args.feedback_rewards,
-            envs=self.envs,
-            env_config=self.env_config,
-            prompt_config=self.prompt_config,
-        )
+        
+        if self.strategy.args.advantage_estimator == "reinforce":
+                self.experience_maker = RemoteExperienceMaker_CardGame_REINFORCE(
+                actor=self.actor,
+                critic=self.critic,
+                reward_model=self.reward_model,
+                initial_model=self.initial_model,
+                tokenizer=self.tokenizer,
+                data_processor=self.data_processor,
+                prompt_max_len=self.prompt_max_len,
+                kl_controller=self.kl_ctl,
+                strategy=self.strategy,
+                remote_rm_url=self.remote_rm_url,
+                reward_fn=self.reward_fn,
+                vllm_engines=self.vllm_engines,
+                packing_samples=self.strategy.args.packing_samples,
+                multimodal=self.strategy.args.multimodal,
+                envs=self.envs,
+                env_config=self.env_config,
+                prompt_config=self.prompt_config,
+            )
+        else:
+            self.experience_maker = RemoteExperienceMaker_CardGame(
+                actor=self.actor,
+                critic=self.critic,
+                reward_model=self.reward_model,
+                initial_model=self.initial_model,
+                tokenizer=self.tokenizer,
+                data_processor=self.data_processor,
+                prompt_max_len=self.prompt_max_len,
+                kl_controller=self.kl_ctl,
+                strategy=self.strategy,
+                remote_rm_url=self.remote_rm_url,
+                reward_fn=self.reward_fn,
+                vllm_engines=self.vllm_engines,
+                feedback_model=self.feedback_model,
+                packing_samples=self.strategy.args.packing_samples,
+                multimodal=self.strategy.args.multimodal,
+                feedback_rewards=self.strategy.args.feedback_rewards,
+                envs=self.envs,
+                env_config=self.env_config,
+                prompt_config=self.prompt_config,
+            )
 
         backend = getattr(self.strategy.args, "vllm_sync_backend", "nccl")
         self.use_cuda_ipc = False

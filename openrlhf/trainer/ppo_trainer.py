@@ -268,8 +268,8 @@ class PPOTrainer(ABC):
                         self.strategy.print(output)
                     self.replay_buffer.append(experience)
 
-                if self.args.advantage_estimator != "group_norm" and self.args.advantage_estimator != "uniform":
-                    self.replay_buffer.normalize("advantages", self.strategy)
+                # if self.args.advantage_estimator != "group_norm" and self.args.advantage_estimator != "uniform":
+                #     self.replay_buffer.normalize("advantages", self.strategy)
                 status = self.ppo_train(steps)
                 self.replay_buffer.clear()
 

@@ -157,5 +157,6 @@ wandb/*
 checkpoints/*
 latex2sympy/*
 openrlhf/textgrad/logs/*
-
+openrlhf/reinforce/logs/*
 openrlhf/textgrad/checkpoint/*
+openrlhf/reinforce/checkpoint/*

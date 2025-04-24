@@ -237,7 +237,7 @@ class GeneralPointEnv_oneline(gym.Env):
         
         if verify_info_step_reward is None:
             verify_info_step_reward = "Something is wrong"
-            reward = -1.0
+            reward = 0.0
         self.verify_info = verify_info + verify_info_step_reward
 
         reward = reward + reward_json_formula + reward_json_cards + reward_json_number + reward_list_cards + reward_list_number
