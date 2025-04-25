@@ -71,6 +71,10 @@ class RolloutStorage:
     rewards: Optional[torch.Tensor] = None
     returns: Optional[torch.Tensor] = None
     prompt: Optional[list[str]] = None
+    sequences_for_KL: Optional[torch.Tensor] = None
+    attention_mask_for_KL: Optional[torch.Tensor] = None
+    action_mask_for_KL: Optional[torch.Tensor] = None
+    reward_diff: Optional[torch.Tensor] = None
 
     # Optional: Add a method for easy validation
     def __post_init__(self):
@@ -127,6 +131,11 @@ class Experience_CARDGAME:
     info: Optional[dict]
     kl: Optional[torch.Tensor] = None
     visual_inputs: Optional[dict] = field(default_factory=dict)
+    sequences_for_KL: Optional[torch.Tensor] = None
+    attention_mask_for_KL: Optional[torch.Tensor] = None
+    action_mask_for_KL: Optional[torch.Tensor] = None
+    reward_diff: Optional[torch.Tensor] = None
+
 
     @torch.no_grad()
     def to_device(self, device: torch.device):
@@ -145,6 +154,10 @@ class Experience_CARDGAME:
         # if self.visual_inputs is not None:
         #     for i in range(len(self.visual_inputs)):
         #         self.visual_inputs[i] = {key: to(value, device) for key, value in self.visual_inputs[i].items()}
+        self.reward_diff = to(self.reward_diff, device)
+        self.sequences_for_KL = to(self.sequences_for_KL, device)
+        self.attention_mask_for_KL = to(self.attention_mask_for_KL, device)
+        self.action_mask_for_KL = to(self.action_mask_for_KL, device)
         return self
 
     def pin_memory(self):
@@ -163,6 +176,10 @@ class Experience_CARDGAME:
         # if self.visual_inputs is not None:
         #     for i in range(len(self.visual_inputs)):
         #         self.visual_inputs[i] = {key: pin_memory(value) for key, value in self.visual_inputs[i].items()}
+        self.reward_diff = pin_memory(self.reward_diff)
+        self.sequences_for_KL = pin_memory(self.sequences_for_KL)
+        self.attention_mask_for_KL = pin_memory(self.attention_mask_for_KL)
+        self.action_mask_for_KL = pin_memory(self.action_mask_for_KL)
         return self
     
 
@@ -204,6 +221,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         self.packing_samples = packing_samples
         self.multimodal = multimodal
         self.feedback_rewards = feedback_rewards
+        self.distillation = self.strategy.args.distillation
 
         if self.prompt_config.use_vision:
             self.prompt_vision = PROMPT_FN[self.prompt_config.prompt_vision]
@@ -393,6 +411,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         previous_responses = [[] for _ in range(self.num_envs)]
         previous_feedbacks = [[] for _ in range(self.num_envs)]
         previous_verify_infos = [[] for _ in range(self.num_envs)]
+        previous_rewards = [[] for _ in range(self.num_envs)]
 
         if self.prompt_config.use_vision:
             prompt, _ = self.prompt_vision, self.pattern_vision
@@ -453,13 +472,21 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             mini_batch.returns = rewards_tensor
             mini_batch.masks = masks_tensor         # Shape: (num_envs,)
             mini_batch.bad_masks = bad_masks_tensor # Shape: (num_envs,)
-
+            reward_diff = torch.zeros_like(rewards_tensor, dtype=torch.float32)
+            for i in range(self.num_envs):
+                if len(previous_rewards[i]) > 0:
+                    reward_diff[i] = rewards[i] - previous_rewards[i][-1]
+                else:
+                    reward_diff[i] = 0.0
+            mini_batch.reward_diff = reward_diff
             replay_buffer.append(copy.deepcopy(mini_batch))
+            
             
             for i, model_response in enumerate(mini_batch.output_text):
                 previous_responses[i].append(model_response)
             for i in range(self.num_envs):
                 previous_verify_infos[i].append(info_batch["Verify Info"][i])
+                previous_rewards[i].append(rewards[i])
 
             # get feedbacks from teacher model
             # feedbacks = self.get_feedbacks(task_prompt, obs_batch, info_batch, previous_responses, previous_verify_infos, previous_feedbacks, self.multimodal, **generate_kwargs)
@@ -630,19 +657,6 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         self.actor.eval()
         device = torch.cuda.current_device()
 
-        # # extract values from samples
-        # sequences = mini_batch.sequences
-        # attention_mask = mini_batch.attention_mask
-        # num_actions = mini_batch.num_actions
-        # packed_seq_lens = mini_batch.packed_seq_lens
-        # visual_inputs = self.make_input_batch(mini_batch.visual_inputs) # list[Dict] -> Dict.
-
-        # # Move data to CPU for remote processing
-        # sequences_cpu = sequences.to("cpu")
-        # attention_mask_cpu = attention_mask.to("cpu")
-        # visual_inputs_cpu = {k: v.to("cpu") for k, v in visual_inputs.items() if k != "input_ids" and k != "attention_mask"}
-
-        
         chunk_size = self.strategy.args.micro_train_batch_size
 
         # Extract values from samples
@@ -663,6 +677,13 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         all_action_log_probs = []
         all_base_action_log_probs = []
 
+        # if args.distillation:
+        #     all_kl_action_log_probs = []
+        #     sequences_for_KL_chunks = self.split_into_chunks(mini_batch.sequences_for_KL, chunk_size)
+        #     attention_mask_for_KL_chunks = self.split_into_chunks(mini_batch.attention_mask_for_KL, chunk_size)
+        #     action_mask_for_KL_chunks = self.split_into_chunks(mini_batch.action_mask_for_KL, chunk_size)
+
+        
         # Process each chunk
         for i in range(len(sequences_chunks)):
             # Clear GPU cache before processing new chunk
@@ -725,13 +746,29 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             del action_log_probs_chunk, base_action_log_probs_chunk
             torch.cuda.empty_cache()
 
+            # if args.distillation:
+            #     seq_chunk_for_KL = sequences_for_KL_chunks[i]
+            #     attn_chunk_for_KL = attention_mask_for_KL_chunks[i]
+            #     action_mask_for_KL_chunk = action_mask_for_KL_chunks[i]
+            #     kl_action_log_probs_chunk = self.actor(
+            #         seq_chunk_for_KL.to(device),
+            #         action_mask_for_KL_chunk,
+            #         attn_chunk_for_KL.to(device),
+            #         ring_attn_group=self.strategy.ring_attn_group,
+            #         logps_allgather=True,
+            #         visual_inputs=actor_vis_inputs,
+            #     )
+            #     all_kl_action_log_probs.append(kl_action_log_probs_chunk)
+            #     del seq_chunk_for_KL, attn_chunk_for_KL, action_mask_for_KL_chunk
+            
+
         # Concatenate results
         action_log_probs = torch.cat(all_action_log_probs, dim=0)
         if all_base_action_log_probs[0] is not None:
             base_action_log_probs = torch.cat(all_base_action_log_probs, dim=0)
         else:
             base_action_log_probs = None
-
+        
         actor_value_rm_time = time.time() - start_time
         start = time.time()
         wait_time = time.time() - start
@@ -744,7 +781,8 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         # Make experience objects
         if base_action_log_probs is not None:
             base_action_log_probs = base_action_log_probs.to(device)
-
+        else:
+            base_action_log_probs = None
         rewards = mini_batch.rewards
         r = rewards.to(device)
 
@@ -788,8 +826,8 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             kl = unpacking_samples(kl, num_actions)
             kl_mean = torch.tensor([each_kl.mean() for each_kl in kl], device=device)
 
-        if not args.use_kl_loss:
-            base_action_log_probs = None
+        # if not args.use_kl_loss:
+        #     base_action_log_probs = None
 
         info = {
             "kl": kl_mean,
@@ -799,6 +837,15 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             "total_length": mini_batch.total_length,
             "num_actions": mini_batch.num_actions,
         }
+
+        # if args.distillation:
+        #     kl2better_response = compute_approx_kl(
+        #         kl_action_log_probs,
+        #         action_log_probs,
+        #         action_mask=mini_batch.action_mask_for_KL,
+        #         kl_estimator="k2",
+        #     )
+            # kl2better_response_mean = masked_mean(kl2better_response, mini_batch.action_mask_for_KL, dim=-1)
 
         if self.strategy.args.perf:
             self.perf_stats["actor_value_rm_time"] += actor_value_rm_time
@@ -815,7 +862,11 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             action_mask=mini_batch.action_mask,
             info=info,
             kl=kl,
-            visual_inputs=visual_inputs
+            visual_inputs=visual_inputs,
+            sequences_for_KL=mini_batch.sequences_for_KL if self.strategy.args.distillation else None,
+            attention_mask_for_KL=mini_batch.attention_mask_for_KL if self.strategy.args.distillation else None,
+            action_mask_for_KL=mini_batch.action_mask_for_KL if self.strategy.args.distillation else None,
+            reward_diff=mini_batch.reward_diff if self.strategy.args.distillation else None,
         )
 
         self.actor.train()  # Reset model state
@@ -873,11 +924,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             visual_inputs_chunk.pop("attention_mask")
             visual_inputs_chunk = {k: v.to("cuda") for k, v in visual_inputs_chunk.items()}
             visual_inputs.append(visual_inputs_chunk)
-        # visual_inputs.pop("input_ids")
-        # visual_inputs.pop("attention_mask")
-        # visual_inputs = {k: v.to("cuda") for k, v in visual_inputs.items()} # 'pixel_values', 'image_grid_thw'
-
-        # # Expand prompt list based on the number of samples per prompt
+        
         # all_prompts = sum([[prompt] for prompt in prompt_texts], [])
         batch_size = (len(messages) + len(llms) - 1) // len(llms)
 
@@ -939,6 +986,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
 
         pad_token_id, eos_token_id = self.tokenizer.pad_token_id, self.tokenizer.eos_token_id
         sequences = []
+        sequences_for_KL = []
         for j, output in enumerate(all_outputs):
             # left padding input
             input_len = len(output.prompt_token_ids)
@@ -956,7 +1004,6 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         sequences = sequences.to("cuda")
         attention_mask = attention_mask.to("cuda")
         action_mask = action_mask.to("cuda")
-
         self.response_length_list.extend(attention_mask.float().sum(dim=-1).tolist())
 
         # for logging
@@ -979,6 +1026,9 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
                         bad_masks=None,
                         action_log_probs=None,
                         prompt=prompt_texts_img_pad_removed,
+                        sequences_for_KL=sequences if self.distillation else None,
+                        attention_mask_for_KL=attention_mask if self.distillation else None,
+                        action_mask_for_KL=action_mask if self.distillation else None,
         )
 
         return mini_batch
@@ -1183,13 +1233,17 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             visual_inputs_chunk.pop("attention_mask")
             visual_inputs_chunk = {k: v.to("cuda") for k, v in visual_inputs_chunk.items()}
             visual_inputs.append(visual_inputs_chunk)
-        # visual_inputs = {k: v.to("cuda") for k, v in visual_inputs.items()} # 'pixel_values', 'image_grid_thw'
 
+        # if self.distillation:
+        #     feedback_prompts_ids = [
+        #         self.processor.apply_chat_template(msg, tokenize=True, add_generation_prompt=True)
+        #         for msg in messages
+        #     ]
+        #     feedback_prompts_ids = [feedback_prompt_ids[0] for feedback_prompt_ids in feedback_prompts_ids]
         base_prompts_ids = [
             self.processor.apply_chat_template(msg, tokenize=True, add_generation_prompt=True)
             for msg in messages_no_feedback
         ]
-        # all_feedback_prompts = sum([[prompt] for prompt in feedback_prompts_texts], [])
         base_prompts_ids = [base_prompt_ids[0] for base_prompt_ids in base_prompts_ids]
         batch_size = (len(messages) + len(llms) - 1) // len(llms)
 
@@ -1212,12 +1266,6 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
                 refs.append(
                     llm.add_requests.remote(rank, sampling_params=sampling_params, vllm_vision_input=vllm_inputs)
                 )
-                # for prompt, obs in zip(all_feedback_prompts[i * batch_size : (i + 1) * batch_size], obs_batch[i * batch_size : (i + 1) * batch_size]):
-                #     vllm_inputs.append({
-                #         "prompt": prompt.replace('<|image_pad|>', '').replace('<|vision_start|>', '<|vision_start|><|image_pad|>'),
-                #         "multi_modal_data": {"image": obs},
-                #         "mm_processor_kwargs": kwargs["processor_kwargs"]
-                #     })
                     
         else:
             for i, llm in enumerate(llms):
@@ -1257,6 +1305,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
 
             pad_token_id, eos_token_id = self.tokenizer.pad_token_id, self.tokenizer.eos_token_id
             sequences = []
+            sequences_for_KL = []
             for j, output in enumerate(all_outputs):
                 # left padding input
                 input_len = len(base_prompts_ids[j])
@@ -1264,8 +1313,13 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
                 # right padding output
                 output_len = len(output.outputs[0].token_ids)
                 output_ids = list(output.outputs[0].token_ids) + [pad_token_id] * (max_output_len - output_len)
-                # concat input and output
                 sequences.append(input_ids + output_ids)
+                if self.distillation:
+                    input_len = len(output.prompt_token_ids)
+                    input_feedback_ids = [pad_token_id] * (max_input_len - input_len) + list(output.prompt_token_ids)
+                    output_feedback_ids = list(output.outputs[0].token_ids) + [pad_token_id] * (max_output_len - output_len)
+                    sequences_for_KL.append(input_feedback_ids + output_feedback_ids)
+                    assert len(sequences_for_KL[-1]) == len(sequences[-1]), f"len(sequences_for_KL[-1]): {len(sequences_for_KL[-1])}, len(sequences[-1]): {len(sequences[-1])}"
 
             sequences = torch.tensor(sequences)
             sequences, attention_mask, action_mask = self.actor.process_sequences(
@@ -1274,12 +1328,19 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             sequences = sequences.to("cuda")
             attention_mask = attention_mask.to("cuda")
             action_mask = action_mask.to("cuda")
-            
-            # visual_inputs = self.processor(feedback_prompts_texts, self.prompt_max_len, device="cuda")
-            # visual_inputs.pop("input_ids")
-            # visual_inputs.pop("attention_mask")
-            # visual_inputs = {k: v.to("cuda") for k, v in visual_inputs.items()} # 'pixel_values', 'image_grid_thw'
             self.response_length_list.extend(attention_mask.float().sum(dim=-1).tolist())
+
+
+            if self.distillation:
+                sequences_for_KL = torch.tensor(sequences_for_KL)
+                sequences_for_KL, attention_mask_for_KL, action_mask_for_KL = self.actor.process_sequences(
+                    sequences_for_KL, max_input_len, eos_token_id, pad_token_id
+                )
+                sequences_for_KL = sequences_for_KL.to("cuda")
+                attention_mask_for_KL = attention_mask_for_KL.to("cuda")
+                action_mask_for_KL = action_mask_for_KL.to("cuda")
+                assert action_mask_for_KL.size(1) == action_mask.size(1), f"action_mask_for_KL.size(1): {action_mask_for_KL.size(1)}, action_mask.size(1): {action_mask.size(1)}"
+
             
             # for logging
             prompt_texts_img_pad_removed = [prompt.replace('<|image_pad|>', '').replace('<|vision_start|>', '<|vision_start|><|image_pad|>') for prompt in feedback_prompts_texts]
@@ -1301,6 +1362,9 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
                             bad_masks=None,
                             action_log_probs=None,
                             prompt = prompt_texts_img_pad_removed,
+                            sequences_for_KL=sequences_for_KL if self.distillation else None,
+                            attention_mask_for_KL=attention_mask_for_KL if self.distillation else None,
+                            action_mask_for_KL=action_mask_for_KL if self.distillation else None
             )
         # else:
         #     # NOTE: concat all outputs to following format:

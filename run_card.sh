@@ -47,11 +47,11 @@ ray job submit --address="http://127.0.0.1:8265" \
    --grad_accum_steps $GRAD_ACCUM_STEPS \
    --n_samples_per_prompt 1 \
    --max_epochs 2 \
-   --prompt_max_len 4800 \
+   --prompt_max_len 3200 \
    --max_samples 100000 \
    --generate_max_len 512 \
    --advantage_estimator uniform \
-   --zero_stage 2 \
+   --zero_stage 3 \
    --bf16 \
    --actor_learning_rate 5e-7 \
    --normalize_reward \
@@ -67,12 +67,14 @@ ray job submit --address="http://127.0.0.1:8265" \
    --eps_clip 0.2 \
    --init_kl_coef 5e-2 \
    --adam_offload \
-   --eval \
    --use_kl_loss \
    --kl_estimator k3 \
    --log \
    --output_log_dir /home/suganuma/src/lmm-r1/openrlhf/textgrad/logs \
    --seed 42 \
+   --distillation \
+   --distillation_coef 1.0 \
+   --eval \
    # --freeze_vision_encoder \
    # --colocate_all_models \
    # --enforce_eager \

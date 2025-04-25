@@ -472,7 +472,8 @@ if __name__ == "__main__":
     parser.add_argument("--freeze_vision_encoder", action="store_true", default=False)
     parser.add_argument("--log", action="store_true", default=False)
     parser.add_argument("--output_log_dir", type=str, default="logs", help="Output log directory")
-
+    parser.add_argument("--distillation", action="store_true", default=False)
+    parser.add_argument("--distillation_coef", type=float, default=0.1, help="Distillation coef")
 
     args = parser.parse_args()
 

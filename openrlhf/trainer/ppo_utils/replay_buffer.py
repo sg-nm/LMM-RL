@@ -38,6 +38,10 @@ class BufferItem:
     action_mask: Optional[torch.BoolTensor]
     info: Optional[dict]
     visual_inputs: Optional[dict]
+    sequences_for_KL: Optional[torch.Tensor]
+    attention_mask_for_KL: Optional[torch.LongTensor]
+    action_mask_for_KL: Optional[torch.BoolTensor]
+    reward_diff: Optional[torch.Tensor]
 
 
 def split_input_batch(batch: Dict, tokenizer) -> List[Dict]:
@@ -154,12 +158,17 @@ def split_experience_batch(experience: Experience, data_processor: Optional[Base
 
 def zero_pad_sequences(sequences: List[torch.Tensor], side: str = "left") -> torch.Tensor:
     assert side in ("left", "right")
-    max_len = max(seq.size(0) for seq in sequences)
-    padded_sequences = []
-    for seq in sequences:
-        pad_len = max_len - seq.size(0)
-        padding = (pad_len, 0) if side == "left" else (0, pad_len)
-        padded_sequences.append(F.pad(seq, padding))
+    try:
+        max_len = max(seq.size(0) for seq in sequences)
+        padded_sequences = []
+        for seq in sequences:
+            pad_len = max_len - seq.size(0)
+            padding = (pad_len, 0) if side == "left" else (0, pad_len)
+            padded_sequences.append(F.pad(seq, padding))
+    except Exception as e:
+        print(f"Error in zero_pad_sequences: {e}")
+        print(f"sequences: {sequences}")
+        raise e
     return torch.stack(padded_sequences, dim=0)
 
 
@@ -404,6 +413,10 @@ class ReplayBuffer_CARDGAME(ABC):
             "advantages",
             "attention_mask",
             "action_mask",
+            "sequences_for_KL",
+            "attention_mask_for_KL",
+            "action_mask_for_KL",
+            "reward_diff",
         )
         for key in keys:
             value = getattr(experience, key)
@@ -515,12 +528,16 @@ class ReplayBuffer_CARDGAME(ABC):
             "advantages",
             "attention_mask",
             "action_mask",
+            "sequences_for_KL",
+            "attention_mask_for_KL",
+            "action_mask_for_KL",
+            "reward_diff",
         )
         for key in keys:
             vals = [getattr(item, key) for item in items]
-            if not packing_samples and not (key == "returns" or key == "advantages"):
+            if not packing_samples and not (key == "returns" or key == "advantages" or key == "reward_diff"):
                 batch_data = zero_pad_sequences(vals, "left") if vals[0] is not None else None
-            elif not packing_samples and (key == "returns" or key == "advantages"):
+            elif not packing_samples and (key == "returns" or key == "advantages" or key == "reward_diff"):
                 batch_data = torch.stack(vals, dim=0) if vals[0] is not None else None
             else:
                 batch_data = vals if vals[0] is not None else None
@@ -562,6 +579,28 @@ class ReplayBuffer_CARDGAME(ABC):
                 att_mask[left_pad:right_pad],
                 act_mask[:right_pad],
             )
+
+
+            if item.action_mask_for_KL is not None and item.attention_mask_for_KL is not None and item.sequences_for_KL is not None:
+                seq_for_kl, att_mask_for_kl, act_mask_for_kl = (
+                    item.sequences_for_KL,
+                    item.attention_mask_for_KL,
+                    item.action_mask_for_KL,
+                )
+                right_pad_for_kl = (1 - act_mask_for_kl.long()).sum()
+                right_pad_for_kl = None if right_pad_for_kl == 0 else -right_pad_for_kl
+                left_pad_for_kl = att_mask_for_kl.long().argmax()
+                (
+                    item.sequences_for_KL,
+                    item.attention_mask_for_KL,
+                    item.action_mask_for_KL,
+                ) = (
+                    seq_for_kl[left_pad_for_kl:right_pad_for_kl],
+                    att_mask_for_kl[left_pad_for_kl:right_pad_for_kl],
+                    act_mask_for_kl[:right_pad_for_kl],
+                )
+                assert item.action_mask_for_KL.size(0) == item.action_mask.size(0), f"item.action_mask_for_KL.size(0): {item.action_mask_for_KL.size(0)}, item.action_mask.size(0): {item.action_mask.size(0)}"
+                
         return items
     
     def make_input_batch(self, inputs: List[Dict]) -> Dict:

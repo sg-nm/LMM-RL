@@ -1,1 +1,32 @@
-[]
+[
+    {
+        "prompt": "\n## Task Description\nYou are an expert 24 points card game player. You are observing these four cards in the image.\nNote that 'J', 'Q', and 'K' count as '10'., and each card must be used once.\nYour goal is to find a formula that evaluates to 24 using numbers from the cards and operators such as '+', '-', '*', '/', '(', ')', and '='.\n\n## Output format\nYour response should be a valid JSON file in the following format:\n{\n  \"cards\": [x, y, z, w], where 'J', 'Q', and 'K' count as '10'. Also, omit the suit of the cards.,\n  \"number\": [a, b, c, d], where a, b, c, and d are the numbers on the cards,\n  \"thought\": \"your step by step thought process to build the formula\",\n  \"formula\": \"an equation that equals 24\",\n}\n\n## Output Example\n{\"cards\": [\"4\", \"3\", \"2\", \"K\"], \"number\": [4, 3, 2, 10], \"formula\": \"4*3+2+10=24\"}\n\nPlease only output the json.\n",
+        "responses": "{\"cards\": [\"2\", \"6\", \"5\", \"4\"], \"number\": [2, 6, 5, 4], \"thought\": \"I can use the 2 and 4 to make 8, and then use 6 and 5 to make 30, and subtract 6 to get 24.\", \"formula\": \"(5*6+4)-2\"}",
+        "verify_info": "(5*6 is partially correct but the full formula does not match any solution.",
+        "reward": -0.04999999999999999
+    },
+    {
+        "prompt": "\n## Task Description\nYou are an expert 24 points card game player. You are observing these four cards in the image.\nNote that 'J', 'Q', and 'K' count as '10'., and each card must be used once.\nYour goal is to find a formula that evaluates to 24 using numbers from the cards and operators such as '+', '-', '*', '/', '(', ')', and '='.\n\n## Output format\nYour response should be a valid JSON file in the following format:\n{\n  \"cards\": [x, y, z, w], where 'J', 'Q', and 'K' count as '10'. Also, omit the suit of the cards.,\n  \"number\": [a, b, c, d], where a, b, c, and d are the numbers on the cards,\n  \"thought\": \"your step by step thought process to build the formula\",\n  \"formula\": \"an equation that equals 24\",\n}\n\n## Output Example\n{\"cards\": [\"4\", \"3\", \"2\", \"K\"], \"number\": [4, 3, 2, 10], \"formula\": \"4*3+2+10=24\"}\n\nPlease only output the json.\n",
+        "responses": "{\"cards\": [\"2\", \"6\", \"5\", \"4\"], \"number\": [2, 6, 5, 4], \"thought\": \"I can use the 2 and 4 to make 8, and then use 6 and 5 to make 30, and subtract 6 to get 24.\", \"formula\": \"(5*6+4)-2\"}",
+        "verify_info": "(5*6 is partially correct but the full formula does not match any solution.",
+        "reward": -0.04999999999999999
+    },
+    {
+        "prompt": "\n## Task Description\nYou are an expert 24 points card game player. You are observing these four cards in the image.\nNote that 'J', 'Q', and 'K' count as '10'., and each card must be used once.\nYour goal is to find a formula that evaluates to 24 using numbers from the cards and operators such as '+', '-', '*', '/', '(', ')', and '='.\n\n## Output format\nYour response should be a valid JSON file in the following format:\n{\n  \"cards\": [x, y, z, w], where 'J', 'Q', and 'K' count as '10'. Also, omit the suit of the cards.,\n  \"number\": [a, b, c, d], where a, b, c, and d are the numbers on the cards,\n  \"thought\": \"your step by step thought process to build the formula\",\n  \"formula\": \"an equation that equals 24\",\n}\n\n## Output Example\n{\"cards\": [\"4\", \"3\", \"2\", \"K\"], \"number\": [4, 3, 2, 10], \"formula\": \"4*3+2+10=24\"}\n\nPlease only output the json.\n",
+        "responses": "{\"cards\": [\"2\", \"6\", \"5\", \"4\"], \"number\": [2, 6, 5, 4], \"thought\": \"I can use the 2 and 4 to make 8, and then use 6 and 5 to make 30, and subtract 6 to get 24.\", \"formula\": \"(5*6+4)-2\"}",
+        "verify_info": "(5*6 is partially correct but the full formula does not match any solution.",
+        "reward": -0.04999999999999999
+    },
+    {
+        "prompt": "\n## Task Description\nYou are an expert 24 points card game player. You are observing these four cards in the image.\nNote that 'J', 'Q', and 'K' count as '10'., and each card must be used once.\nYour goal is to find a formula that evaluates to 24 using numbers from the cards and operators such as '+', '-', '*', '/', '(', ')', and '='.\n\n## Output format\nYour response should be a valid JSON file in the following format:\n{\n  \"cards\": [x, y, z, w], where 'J', 'Q', and 'K' count as '10'. Also, omit the suit of the cards.,\n  \"number\": [a, b, c, d], where a, b, c, and d are the numbers on the cards,\n  \"thought\": \"your step by step thought process to build the formula\",\n  \"formula\": \"an equation that equals 24\",\n}\n\n## Output Example\n{\"cards\": [\"4\", \"3\", \"2\", \"K\"], \"number\": [4, 3, 2, 10], \"formula\": \"4*3+2+10=24\"}\n\nPlease only output the json.\n",
+        "responses": "{\"cards\": [\"2\", \"6\", \"5\", \"4\"], \"number\": [2, 6, 5, 4], \"thought\": \"I can use the 2 and 4 to make 8, and then use 6 and 5 to make 30, and subtract 6 to get 24.\", \"formula\": \"(5*6+4)-2\"}",
+        "verify_info": "(5*6 is partially correct but the full formula does not match any solution.",
+        "reward": -0.04999999999999999
+    },
+    {
+        "prompt": "\n## Task Description\nYou are an expert 24 points card game player. You are observing these four cards in the image.\nNote that 'J', 'Q', and 'K' count as '10'., and each card must be used once.\nYour goal is to find a formula that evaluates to 24 using numbers from the cards and operators such as '+', '-', '*', '/', '(', ')', and '='.\n\n## Output format\nYour response should be a valid JSON file in the following format:\n{\n  \"cards\": [x, y, z, w], where 'J', 'Q', and 'K' count as '10'. Also, omit the suit of the cards.,\n  \"number\": [a, b, c, d], where a, b, c, and d are the numbers on the cards,\n  \"thought\": \"your step by step thought process to build the formula\",\n  \"formula\": \"an equation that equals 24\",\n}\n\n## Output Example\n{\"cards\": [\"4\", \"3\", \"2\", \"K\"], \"number\": [4, 3, 2, 10], \"formula\": \"4*3+2+10=24\"}\n\nPlease only output the json.\n",
+        "responses": "{\"cards\": [\"2\", \"6\", \"5\", \"4\"], \"number\": [2, 6, 5, 4], \"thought\": \"I can use the 2 and 4 to make 8, and then use 6 and 5 to make 30, and subtract 6 to get 24.\", \"formula\": \"(5*6+4)-2\"}",
+        "verify_info": "(5*6 is partially correct but the full formula does not match any solution.",
+        "reward": -0.04999999999999999
+    }
+]
