@@ -47,7 +47,7 @@ ray job submit --address="http://127.0.0.1:8265" \
    --grad_accum_steps $GRAD_ACCUM_STEPS \
    --n_samples_per_prompt 1 \
    --max_epochs 2 \
-   --prompt_max_len 3200 \
+   --prompt_max_len 4000 \
    --max_samples 100000 \
    --generate_max_len 512 \
    --advantage_estimator uniform \

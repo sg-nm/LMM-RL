@@ -23,7 +23,7 @@ run_name: "card_24"
 num_processes: 1
 num_updates: 20
 num_envs: 128
-num_eval_envs: 52
+num_eval_envs: 15
 env_config:
   id: 'gym_cards/GeneralPoint-oneline-v0'
   target_points: 24
@@ -48,7 +48,7 @@ prompt_config:
   use_vision: true
   use_language: false
   enable_verification: true
-  prompt_vision: "Q_GeneralPoint_EQN_VL"
+  prompt_vision: "Q_GeneralPoint_EQN_VL_REASONING"
   pattern_vision: "formula"
   prompt_language: "Q_GeneralPoint_EQN_L"
   pattern_language: "formula"

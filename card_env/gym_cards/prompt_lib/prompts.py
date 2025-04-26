@@ -9,6 +9,7 @@ import json
 example = {
   "cards": ['4', '3', '2', 'K'],
   "number": [4, 3, 2, 10],
+  "thought": "<step by step reasoning process to build the formula>",
   "formula": "4*3+2+10=24",
 }
 example_json_text = json.dumps(example, ensure_ascii=False)
@@ -32,6 +33,28 @@ Your response should be a valid JSON file in the following format:
 {example_json_text}
 
 Please only output the json.
+"""
+
+Q_GeneralPoint_EQN_VL_REASONING = """
+## Task Description
+You are an expert {target_number} points card game player. You are observing four cards in the image.
+Your goal is to find a formula that evaluates to {target_number} using numbers from the cards and operators such as '+', '-', '*', '/', '(', ')', and '='.
+Note that {face_card_msg}, and each card must be used exactly once.
+
+Please reason step by step to build the formula and provide the reasoning process in the "thought" field below.
+
+## Output format
+Your response should be a valid JSON file in the following format:
+{{
+  "cards": [x, y, z, w], where {face_card_msg} Also, omit the suit of the cards.,
+  "number": [a, b, c, d], where a, b, c, and d are the numbers on the cards,
+  "thought": "step by step reasoning process to build the formula",
+  "formula": "the formula that equals {target_number}",
+}}
+
+## Output Example
+{example_json_text}
+
 """
 
 Q_GeneralPoint_EQN_L = """
