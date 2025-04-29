@@ -26,9 +26,9 @@ def reward_fn(rewards: List[torch.Tensor]):
 def _validate_args(args):
     actor_world_size = args.actor_num_nodes * args.actor_num_gpus_per_node
 
-    assert (
-        args.rollout_batch_size % actor_world_size == 0
-    ), f"rollout_bach_size must be divisible by actor_world_size, got {args.rollout_batch_size} and {actor_world_size}"
+    # assert (
+    #     args.rollout_batch_size % actor_world_size == 0
+    # ), f"rollout_bach_size must be divisible by actor_world_size, got {args.rollout_batch_size} and {actor_world_size}"
 
     assert args.zero_stage != 3 or args.vllm_num_engines > 0, f"ZeRO-3 is only supported when vLLM enabled"
 
@@ -159,7 +159,7 @@ def train(args):
         ref_model = PPORayActorGroup(
             args.ref_num_nodes,
             args.ref_num_gpus_per_node,
-            ReferenceModelRayActor_multimodal,
+            ReferenceModelRayActor_multimodal if args.multimodal else ReferenceModelRayActor,
             pg=pg,
             num_gpus_per_actor=0.2 if pg else 1,
         )
@@ -482,6 +482,8 @@ if __name__ == "__main__":
     parser.add_argument("--log", action="store_true", default=False)
     parser.add_argument("--output_log_dir", type=str, default="logs", help="Output log directory")
     parser.add_argument("--colocate_actor_vllm", action="store_true", default=False)
+    parser.add_argument("--distillation", action="store_true", default=False)
+    parser.add_argument("--distillation_coef", type=float, default=1.0, help="Distillation coef")
 
 
     args = parser.parse_args()
@@ -543,5 +545,8 @@ if __name__ == "__main__":
 
     
     args.n_feedback_samples_per_prompt = args.micro_train_batch_size
+
+    if not args.multimodal:
+        args.dataset_name = "card_24_L"
     
     train(args)

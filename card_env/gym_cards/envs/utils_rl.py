@@ -168,7 +168,8 @@ def step_rewards(card_nums: list,
             if prev_register == "":
                 stepper.add(REWARD_FN["NO_SOLUTION"], "your formula does not match any solution")
             else:
-                stepper.add(REWARD_FN["NO_SOLUTION"], f"{prev_register} is partially correct but the full formula does not match any solution")
+                stepper.add(REWARD_FN["NO_SOLUTION"], "the full formula does not match any solution")
+                # stepper.add(REWARD_FN["NO_SOLUTION"], f"{prev_register} is partially correct but the full formula does not match any solution")
             break
 
     return stepper

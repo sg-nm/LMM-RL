@@ -527,7 +527,32 @@ class PPOTrainer(ABC):
             aux_loss = output.aux_loss
         else:
             aux_loss = 0
-        loss = actor_loss + aux_loss * self.args.aux_loss_coef + kl_loss * self.kl_ctl.value
+
+        # distillation
+        if self.args.distillation:
+            feedback_action_log_probs, output = self.actor(
+                experience.sequences_for_KL,
+                action_mask=experience.action_mask_for_KL,
+                attention_mask=experience.attention_mask_for_KL,
+                return_output=True,
+                ring_attn_group=self.strategy.ring_attn_group,
+                logps_allgather=True,
+            )
+            kl2better_response = compute_approx_kl(
+                feedback_action_log_probs,
+                action_log_probs,
+                experience.action_mask_for_KL,
+                kl_estimator="k2",
+            )
+            kl2better_loss = masked_mean(kl2better_response, experience.action_mask_for_KL, dim=-1)
+            kl2better_loss = experience.reward_diff.to(kl2better_loss.device) * kl2better_loss
+            kl2better_loss = kl2better_loss.mean()
+            # self.strategy.backward(self.args.distillation_coef * kl2better_loss, self.actor, self.actor_optim)
+        else:
+            kl2better_loss = 0
+
+        
+        loss = actor_loss + aux_loss * self.args.aux_loss_coef + kl_loss * self.kl_ctl.value + kl2better_loss * self.args.distillation_coef
         self.strategy.backward(loss, self.actor, self.actor_optim)
 
         # ptx loss
@@ -562,6 +587,8 @@ class PPOTrainer(ABC):
         status = {"policy_loss": actor_loss.item(), "actor_lr": self.actor_scheduler.get_last_lr()[0]}
         if self.pretrain_dataloader is not None:
             status["ptx_loss"] = ptx_loss.item()
+        if self.args.distillation:
+            status["kl2better_loss"] = kl2better_loss.detach().item()
         for k, v in experience.info.items():
             if k == "kl":
                 status[k] = ((v * experience.info["response_length"]).sum() / experience.info["response_length"].sum()).item()

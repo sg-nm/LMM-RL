@@ -22,12 +22,13 @@ report_to: wandb
 run_name: "card_24"
 num_processes: 1
 num_updates: 20
-num_envs: 64
+num_envs: 128
+num_eval_envs: 50
 env_config:
   id: 'gym_cards/GeneralPoint-oneline-v0'
   target_points: 24
   treat_face_cards_as_10: true
-  resolution: 384
+  resolution: 448
   face_cards_color: "black"
   verify_iter: 5
   num_steps: 5
@@ -36,7 +37,7 @@ eval_env_config:
   id: 'gym_cards/GeneralPoint-oneline-v0'
   target_points: 24
   treat_face_cards_as_10: true
-  resolution: 384
+  resolution: 448
   face_cards_color: "black"
   verify_iter: 5
   num_evaluations: 1
@@ -59,6 +60,6 @@ generation_config:
   thought_prob_coef: 0.5 # legacy value from RL4VLM
   num_beams: 1 # not used
 output_dir: logs/train.jsonl # not used in training.
-seed: 4
+seed: 42
 save_ckpt: False
 save_every: 1

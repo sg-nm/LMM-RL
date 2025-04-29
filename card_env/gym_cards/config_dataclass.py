@@ -87,7 +87,7 @@ class CardEnvConfig:
     save_ckpt: bool
     save_every: int
     num_envs: int
-
+    num_eval_envs: int
 
 # YAMLファイルの読み込みとConfigクラスへの変換
 def load_config_from_yaml(path: str) -> CardEnvConfig:
@@ -114,4 +114,5 @@ def load_config_from_yaml(path: str) -> CardEnvConfig:
         save_ckpt=config_dict["save_ckpt"],
         save_every=config_dict["save_every"],
         num_envs=config_dict["num_envs"],
+        num_eval_envs=config_dict["num_eval_envs"],
     )

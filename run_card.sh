@@ -13,7 +13,7 @@ set -x
 
 export ACTOR_NUM_GPUS=4
 export BATCH_SIZE_PER_GPU=4
-export GRAD_ACCUM_STEPS=16
+export GRAD_ACCUM_STEPS=8
 export GLOBAL_BATCH_SIZE=$((ACTOR_NUM_GPUS * BATCH_SIZE_PER_GPU * GRAD_ACCUM_STEPS))
 # export GLOBAL_BATCH_SIZE=$((ACTOR_NUM_GPUS * BATCH_SIZE_PER_GPU))
 
@@ -29,15 +29,14 @@ ray job submit --address="http://127.0.0.1:8265" \
    --reward_num_gpus_per_node 1 \
    --actor_num_nodes 1 \
    --actor_num_gpus_per_node $ACTOR_NUM_GPUS \
-   --vllm_num_engines 4 \
+   --vllm_num_engines $ACTOR_NUM_GPUS \
    --vllm_tensor_parallel_size 1 \
    --feedback_vllm_num_engines 4 \
    --feedback_vllm_tensor_parallel_size 1 \
    --colocate_all_models \
    --vllm_sync_backend gloo \
    --vllm_gpu_memory_utilization 0.5 \
-   --multimodal \
-   --pretrain Qwen/Qwen2.5-VL-7B-Instruct \
+   --pretrain Qwen/Qwen2.5-7B-Instruct \
    --feedback_model Qwen/Qwen2.5-14B-Instruct \
    --save_path ./openrlhf/textgrad/checkpoint/qwen25-3-7B \
    --micro_train_batch_size $BATCH_SIZE_PER_GPU \
@@ -46,14 +45,14 @@ ray job submit --address="http://127.0.0.1:8265" \
    --rollout_batch_size $BATCH_SIZE_PER_GPU \
    --grad_accum_steps $GRAD_ACCUM_STEPS \
    --n_samples_per_prompt 1 \
-   --max_epochs 1 \
-   --prompt_max_len 3860 \
+   --max_epochs 2 \
+   --prompt_max_len 4200 \
    --max_samples 100000 \
-   --generate_max_len 386 \
+   --generate_max_len 512 \
    --advantage_estimator uniform \
    --zero_stage 3 \
    --bf16 \
-   --actor_learning_rate 1e-6 \
+   --actor_learning_rate 5e-7 \
    --normalize_reward \
    --gradient_checkpointing \
    --save_steps -1 \
@@ -75,6 +74,10 @@ ray job submit --address="http://127.0.0.1:8265" \
    --vllm_enable_sleep \
    --enforce_eager \
    --eval \
+   --gamma 1.0 \
+   # --distillation \
+   # --distillation_coef 1.0 \
+   # --multimodal \
    # --deepspeed_enable_sleep \
    # --eval \
    # --freeze_vision_encoder \

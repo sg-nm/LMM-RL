@@ -59,12 +59,19 @@ Feedback:
 """
 
 ## Prompt for feedback models on card game
-FEEDBACK_PROMPT_CARD = """Your task is to provide a helpful feedback for another model so that the model can achieve the goal better. 
-You should refer to the `Previous Model's Answer`, `Verification message`, and `Answer examples` below and provide the step by step feedback that can improve the model's thought and answer.
-Note that DO NOT provide or include the answer of the task directly in your feedback even if you know it. Your goal is to help the model to improve its thought and answer.
-Please also point out the output format of the model's response if it is not correct.
+FEEDBACK_PROMPT_CARD = """Your task is to provide helpful hints or directions for another model so that the model can achieve the goal better. 
+You should refer to the `Previous Model's Answer`, `Verification message`, and `Answer examples` below.
 
+== The task that another model is working on ==
 {task}
+"""
+
+FEEDBACK_PROMPT_SUFFIX = """
+====
+
+Please briefly provide useful hints or directions on how to find the formula effectively.
+The hints may focus on factors of 24 and how we should build them.
+Note that DO NOT provide or include answers of the task directly in your feedback because the model wants to improve its thought itself.
 """
 
 
@@ -107,9 +114,8 @@ Please reason step by step, and put your final answer within \\boxed{{}}.
 
 ## Prompt for base model to generate responses with feedbacks
 FEEDBACK_PROMPT_BASE_CARD = """Your task is to solve the following problem. Unfortunately, your previous answers are incorrect or can be improved. 
-Please generate a new answer based on your previous answers and the feedbacks from another model below.
-Please DO NOT include any explicit references to the feedback in your response (e.g., “As another model pointed out XX ...”, “The feedback says ...”).
-You should use the feedback to generate a new answer, but act as if you have not seen the feedback.
+Please provide a new answer by carefully considering ## Feedback and your previous answers below.
+Please DO NOT include any explicit references to the feedback in your response (e.g., “Considering the feedback ...”, “The feedback says ...”).
 
 {task}
 """

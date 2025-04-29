@@ -35,7 +35,7 @@ from openrlhf.utils.remote_rm_utils import remote_rm_fn_ray
 
 from qwen_vl_utils import process_vision_info
 
-from openrlhf.textgrad.feedback_vllm import FEEDBACK_PROMPT, FEEDBACK_PROMPT_BASE, PROMPT_BASE, FEEDBACK_PROMPT_CARD, FEEDBACK_PROMPT_BASE_CARD, RESPONSE_PROMPT_CARD
+from openrlhf.textgrad.feedback_vllm import FEEDBACK_PROMPT, FEEDBACK_PROMPT_BASE, PROMPT_BASE, FEEDBACK_PROMPT_CARD, FEEDBACK_PROMPT_BASE_CARD, RESPONSE_PROMPT_CARD, FEEDBACK_PROMPT_SUFFIX
 from openrlhf.textgrad.custom_reward_functions import check_answer_commonsense_qa, check_answer_math
 
 from openrlhf.trainer.ppo_utils.experience_maker import NaiveExperienceMaker, Samples
@@ -71,6 +71,10 @@ class RolloutStorage:
     rewards: Optional[torch.Tensor] = None
     returns: Optional[torch.Tensor] = None
     prompt: Optional[list[str]] = None
+    sequences_for_KL: Optional[torch.Tensor] = None
+    attention_mask_for_KL: Optional[torch.Tensor] = None
+    action_mask_for_KL: Optional[torch.Tensor] = None
+    reward_diff: Optional[torch.Tensor] = None
 
     # Optional: Add a method for easy validation
     def __post_init__(self):
@@ -127,6 +131,11 @@ class Experience_CARDGAME:
     info: Optional[dict]
     kl: Optional[torch.Tensor] = None
     visual_inputs: Optional[dict] = field(default_factory=dict)
+    sequences_for_KL: Optional[torch.Tensor] = None
+    attention_mask_for_KL: Optional[torch.Tensor] = None
+    action_mask_for_KL: Optional[torch.Tensor] = None
+    reward_diff: Optional[torch.Tensor] = None
+
 
     @torch.no_grad()
     def to_device(self, device: torch.device):
@@ -145,6 +154,10 @@ class Experience_CARDGAME:
         # if self.visual_inputs is not None:
         #     for i in range(len(self.visual_inputs)):
         #         self.visual_inputs[i] = {key: to(value, device) for key, value in self.visual_inputs[i].items()}
+        self.reward_diff = to(self.reward_diff, device)
+        self.sequences_for_KL = to(self.sequences_for_KL, device)
+        self.attention_mask_for_KL = to(self.attention_mask_for_KL, device)
+        self.action_mask_for_KL = to(self.action_mask_for_KL, device)
         return self
 
     def pin_memory(self):
@@ -163,6 +176,10 @@ class Experience_CARDGAME:
         # if self.visual_inputs is not None:
         #     for i in range(len(self.visual_inputs)):
         #         self.visual_inputs[i] = {key: pin_memory(value) for key, value in self.visual_inputs[i].items()}
+        self.reward_diff = pin_memory(self.reward_diff)
+        self.sequences_for_KL = pin_memory(self.sequences_for_KL)
+        self.attention_mask_for_KL = pin_memory(self.attention_mask_for_KL)
+        self.action_mask_for_KL = pin_memory(self.action_mask_for_KL)
         return self
     
 
@@ -170,7 +187,7 @@ class Experience_CARDGAME:
 
 class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
     def __init__(self, 
-                 actor, critic, reward_model, initial_model, tokenizer, data_processor,
+                 actor, critic, reward_model, initial_model, tokenizer, data_processor, feedback_data_processor,
                  prompt_max_len, kl_controller, strategy, remote_rm_url, reward_fn,
                  vllm_engines: List = None, 
                  feedback_model = None, 
@@ -204,7 +221,10 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         self.packing_samples = packing_samples
         self.multimodal = multimodal
         self.feedback_rewards = feedback_rewards
+        self.feedback_processor = feedback_data_processor
+        self.distillation = self.strategy.args.distillation
 
+        assert self.prompt_config.use_vision == self.multimodal, "prompt_config.use_vision and multimodal must be the same."
         if self.prompt_config.use_vision:
             self.prompt_vision = PROMPT_FN[self.prompt_config.prompt_vision]
             self.pattern_vision = self.prompt_config.pattern_vision
@@ -278,6 +298,44 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
                 },
             ]
         return messages, messages_no_feedback
+
+    def formulate_prompt_for_LLMStudent(self, task_prompts: List[str], 
+                                        previous_responses: List[List[str]], previous_feedbacks: List[List[str]], previous_verify_infos: List[List[str]]) -> List[dict]:
+        
+        messages = [[] for _ in range(self.num_envs)]
+        messages_no_feedback = [[] for _ in range(self.num_envs)]
+
+        for i in range(self.num_envs):
+            contents = []
+            contents_no_feedback = []
+            
+            if len(previous_responses[i]) > 0 and len(previous_verify_infos[i]) > 0 and len(previous_feedbacks[i]) > 0:
+                assert len(previous_responses[i]) == len(previous_feedbacks[i]) == len(previous_verify_infos[i]), "The number of previous responses, feedbacks, and verify infos must be the same."
+                feedback_prompt = FEEDBACK_PROMPT_BASE_CARD.format(task=task_prompts[i])
+                contents.append(feedback_prompt)
+                contents_no_feedback.append(task_prompts[i])
+                for idx, (prev_response, prev_feedback, prev_verify_info) in enumerate(zip(previous_responses[i][-self.history_length:], previous_feedbacks[i][-self.history_length:], previous_verify_infos[i][-self.history_length:])):
+                    contents.append(f"\n## Previous your answer ({self.history_length - idx} steps ago):\n{prev_response}")
+                    contents.append(f"\n## Verification message\nYou failed this trial because {prev_verify_info}")
+                    contents.append(f"\n## Feedback ({self.history_length - idx} steps ago):\n{prev_feedback}")
+                    contents_no_feedback.append(f"\n## Previous your answer ({self.history_length - idx} steps ago):\n{prev_response}")
+                    contents_no_feedback.append(f"\n## Verification message\nYou failed this trial because {prev_verify_info}")
+            
+            else:
+                contents.append(task_prompts[i])
+                contents_no_feedback.append(task_prompts[i])
+            
+            messages[i] = [
+                {"role": "user",
+                 "content": "\n".join(contents),
+                },
+            ]
+            messages_no_feedback[i] = [
+                {"role": "user",
+                 "content": "\n".join(contents_no_feedback),
+                },
+            ]
+        return messages, messages_no_feedback
     
     def formulate_feedback_prompt(self, task_prompt: str, obs_batch: List[Image.Image], info_batch: dict,
                          previous_responses: List[List[str]], previous_feedbacks: List[List[str]], previous_verify_infos: List[List[str]]) -> List[dict]:
@@ -317,36 +375,36 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             ]
         return messages
     
-    def formulate_feedback_prompt_for_LLMTeacher(self, task_prompt: str, info_batch: dict,
+    def formulate_feedback_prompt_for_LLMTeacher(self, task_prompts: List[str], info_batch: dict,
                          previous_responses: List[List[str]], previous_feedbacks: List[List[str]], previous_verify_infos: List[List[str]]) -> List[dict]:
         
         messages = [[] for _ in range(self.num_envs)]
 
         for i in range(self.num_envs):
             contents = []
-            feedback_prompt = FEEDBACK_PROMPT_CARD.format(task=task_prompt)
-            contents.append({"type": "text", "text": feedback_prompt})
+            feedback_prompt = FEEDBACK_PROMPT_CARD.format(task=task_prompts[i]) if not self.multimodal else FEEDBACK_PROMPT_CARD.format(task=task_prompts[0])
+            contents.append(feedback_prompt)
             if (len(previous_responses[i]) == len(previous_verify_infos[i]) == len(previous_feedbacks[i])):
                 assert len(previous_responses[i]) == len(previous_feedbacks[i]) == len(previous_verify_infos[i]), "The number of previous responses, feedbacks, and verify infos must be the same."
                 for idx, (prev_response, prev_feedback, prev_verify_info) in enumerate(zip(previous_responses[i][-self.history_length:], previous_feedbacks[i][-self.history_length:], previous_verify_infos[i][-self.history_length:])):
-                    contents.append({"type": "text", "text": f"\n## Previous Model's answer ({self.history_length - idx} steps ago):\n{prev_response}"})
-                    contents.append({"type": "text", "text": f"\n## Verification message\nYou failed this trial because {prev_verify_info}"})
-                    contents.append({"type": "text", "text": f"\n## Answer examples\ncards: {info_batch['Plain Cards'][i]}, number: {info_batch['Numbers'][i]}, formula: {info_batch['Solution'][i]}"})
-                    contents.append({"type": "text", "text": f"\n## Your previous feedback ({self.history_length - idx} steps ago):\n{prev_feedback}"})
+                    contents.append(f"\n## Previous Model's answer ({self.history_length - idx} steps ago):\n{prev_response}")
+                    contents.append(f"\n## Verification message\nYou failed this trial because {prev_verify_info}")
+                    contents.append(f"\n## Answer examples\ncards: {info_batch['Plain Cards'][i]}, number: {info_batch['Numbers'][i]}, formula: {info_batch['Solution'][i]}")
+                    # contents.append(f"\n## Your previous feedback ({self.history_length - idx} steps ago):\n{prev_feedback}")
             
             elif (len(previous_responses[i]) == len(previous_verify_infos[i])):
                 for idx, (prev_response, prev_verify_info) in enumerate(zip(previous_responses[i][-self.history_length:], previous_verify_infos[i][-self.history_length:])):
-                    contents.append({"type": "text", "text": f"\n## Previous Model's answer ({self.history_length - idx} steps ago):\n{prev_response}"})
-                    contents.append({"type": "text", "text": f"\n## Verification message\nYou failed this trial because {prev_verify_info}"})
-                    contents.append({"type": "text", "text": f"\n## Answer examples\ncards: {info_batch['Plain Cards'][i]}, number: {info_batch['Numbers'][i]}, formula: {info_batch['Solution'][i]}"})
+                    contents.append(f"\n## Previous Model's answer ({self.history_length - idx} steps ago):\n{prev_response}")
+                    contents.append(f"\n## Verification message\nYou failed this trial because {prev_verify_info}")
+                    contents.append(f"\n## Answer examples\ncards: {info_batch['Plain Cards'][i]}, number: {info_batch['Numbers'][i]}, formula: {info_batch['Solution'][i]}")
             else:
                 raise ValueError("The number of previous responses, feedbacks, and verify infos must be the same.")
             
-            contents.append({"type": "text", "text": "Feedback:"})
+            contents.append("Feedback:")
             
             messages[i] = [
                 {"role": "user",
-                 "content": contents,
+                 "content": "\n".join(contents) + FEEDBACK_PROMPT_SUFFIX,
                 },
             ]
         return messages
@@ -393,6 +451,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         previous_responses = [[] for _ in range(self.num_envs)]
         previous_feedbacks = [[] for _ in range(self.num_envs)]
         previous_verify_infos = [[] for _ in range(self.num_envs)]
+        previous_rewards = [[] for _ in range(self.num_envs)]
 
         if self.prompt_config.use_vision:
             prompt, _ = self.prompt_vision, self.pattern_vision
@@ -411,19 +470,31 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             vision_res_list = [{} for _ in range(self.num_envs)]
             language_res_list = [{} for _ in range(self.num_envs)]
             self.formulate_vision_arguments(vision_res_list, info_batch)
-            task_prompt = prompt.format(**vision_res_list[0], **language_res_list[0], **self.oracle_arguments)
-            messages, messages_no_feedback = self.formulate_prompt(task_prompt, 
-                                  obs_batch=obs_batch,
-                                  previous_responses=previous_responses,
-                                  previous_feedbacks=previous_feedbacks,
-                                  previous_verify_infos=previous_verify_infos)
+            task_prompts = [prompt.format(**vision_res_list[i], **language_res_list[i], **self.oracle_arguments) for i in range(self.num_envs)]
+            if self.multimodal:
+                messages, messages_no_feedback = self.formulate_prompt(task_prompts[0], 
+                                    obs_batch=obs_batch,
+                                    previous_responses=previous_responses,
+                                    previous_feedbacks=previous_feedbacks,
+                                    previous_verify_infos=previous_verify_infos)
+            else:
+                messages, messages_no_feedback = self.formulate_prompt_for_LLMStudent(task_prompts, 
+                                    previous_responses=previous_responses,
+                                    previous_feedbacks=previous_feedbacks,
+                                    previous_verify_infos=previous_verify_infos)
             
             # base model inference w/o feedback
             if all(len(feedback) == 0 for feedback in previous_feedbacks):
-                mini_batch = self._generate_vllm(obs_batch, messages, self.multimodal, **generate_kwargs)
+                if self.multimodal:
+                    mini_batch = self._generate_vllm(obs_batch, messages, self.multimodal, **generate_kwargs)
+                else:
+                    mini_batch = self._generate_vllm_language(messages, **generate_kwargs)
             else:
                 # base model inference w/o feedback
-                mini_batch = self._generate_vllm_with_feedback(messages, messages_no_feedback, obs_batch, self.multimodal, **generate_kwargs)
+                if self.multimodal:
+                    mini_batch = self._generate_vllm_with_feedback(messages, messages_no_feedback, obs_batch, self.multimodal, **generate_kwargs)
+                else:
+                    mini_batch = self._generate_vllm_with_feedback_language(messages, messages_no_feedback, **generate_kwargs)
             
             # preprocessing the model response to align with json style.
             for i, model_response in enumerate(mini_batch.output_text):
@@ -450,28 +521,35 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             bad_masks_tensor = 1.0 - truncations_tensor.float()
 
             mini_batch.rewards = rewards_tensor     # Shape: (num_envs,)
+            mini_batch.returns = rewards_tensor
             mini_batch.masks = masks_tensor         # Shape: (num_envs,)
             mini_batch.bad_masks = bad_masks_tensor # Shape: (num_envs,)
-
+            reward_diff = torch.zeros_like(rewards_tensor, dtype=torch.float32)
+            for i in range(self.num_envs):
+                if len(previous_rewards[i]) > 0:
+                    reward_diff[i] = rewards[i] - previous_rewards[i][-1]
+                else:
+                    reward_diff[i] = 0.0
+            mini_batch.reward_diff = reward_diff
             replay_buffer.append(copy.deepcopy(mini_batch))
             
             for i, model_response in enumerate(mini_batch.output_text):
                 previous_responses[i].append(model_response)
             for i in range(self.num_envs):
                 previous_verify_infos[i].append(info_batch["Verify Info"][i])
+                previous_rewards[i].append(rewards[i])
 
             # get feedbacks from teacher model
             # feedbacks = self.get_feedbacks(task_prompt, obs_batch, info_batch, previous_responses, previous_verify_infos, previous_feedbacks, self.multimodal, **generate_kwargs)
-            feedbacks = self.get_feedbacks_from_LLMTeacher(task_prompt, info_batch, previous_responses, previous_verify_infos, previous_feedbacks, self.multimodal, **generate_kwargs)
-            # if step == 0 and self.strategy.is_rank_0():
-            #     print(f"Feedbacks: {feedbacks}")
+            feedbacks, feedback_prompts = self.get_feedbacks_from_LLMTeacher(task_prompts, info_batch, previous_responses, previous_verify_infos, previous_feedbacks, self.multimodal, **generate_kwargs)
 
             for i, feedback in enumerate(feedbacks):
                 previous_feedbacks[i].append(feedback)
 
             # Clear the history for environment i
             for i in range(self.num_envs):
-                if episode_start[i]:
+                # if episode_start[i]:
+                if terminations[i] or truncations[i]:
                     previous_responses[i] = []
                     previous_feedbacks[i] = []
                     previous_verify_infos[i] = []
@@ -486,6 +564,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
                     "feedback": feedbacks[0],
                     "reward": rewards[0],
                     "gt_cards": info_batch["Plain Cards"][0],
+                    "feedback_prompt": feedback_prompts[0][0]["content"],
                 }
                 logs.append(log)
 
@@ -597,7 +676,10 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
 
         all_experiences = []
         for mini_batch in tqdm(replay_buffer, total=len(replay_buffer), desc="make_experience", disable=not self.strategy.is_rank_0()):
-            experience = self.make_experience(mini_batch)
+            if self.multimodal:
+                experience = self.make_experience(mini_batch)
+            else:
+                experience = self.make_experience_language(mini_batch)
             # remove unnecessary info
             experience.kl = None
             del experience.info["num_actions"]
@@ -630,19 +712,6 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         self.actor.eval()
         device = torch.cuda.current_device()
 
-        # # extract values from samples
-        # sequences = mini_batch.sequences
-        # attention_mask = mini_batch.attention_mask
-        # num_actions = mini_batch.num_actions
-        # packed_seq_lens = mini_batch.packed_seq_lens
-        # visual_inputs = self.make_input_batch(mini_batch.visual_inputs) # list[Dict] -> Dict.
-
-        # # Move data to CPU for remote processing
-        # sequences_cpu = sequences.to("cpu")
-        # attention_mask_cpu = attention_mask.to("cpu")
-        # visual_inputs_cpu = {k: v.to("cpu") for k, v in visual_inputs.items() if k != "input_ids" and k != "attention_mask"}
-
-        
         chunk_size = self.strategy.args.micro_train_batch_size
 
         # Extract values from samples
@@ -684,8 +753,6 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             base_action_log_probs_ref = ray.put([None] * len(seq_chunk_cpu_list))
         
         
-        
-
         # Initialize lists to store results
         all_action_log_probs = []
         all_base_action_log_probs = []
@@ -702,28 +769,6 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             packed_seq_chunk = packed_seq_lens_chunks[i]
             vis_inputs_chunk = visual_inputs_chunks[i]
 
-            # # Move current chunk to CPU for remote processing
-            # seq_chunk_cpu = seq_chunk.to("cpu")
-            # attn_chunk_cpu = attn_chunk.to("cpu")
-            # vis_inputs_chunk_cpu = {k: v.to("cpu") for k, v in vis_inputs_chunk.items() if k != "input_ids" and k != "attention_mask"}
-
-            # # Process initial model chunk
-            # if self.initial_model is not None:
-            #     base_action_log_probs_ref = self.initial_model.forward.remote(
-            #         sequences=seq_chunk_cpu,
-            #         action_mask=action_mask_chunk,
-            #         attention_mask=attn_chunk_cpu,
-            #         logps_allgather=True,
-            #         packed_seq_lens=packed_seq_chunk,
-            #         visual_inputs=vis_inputs_chunk_cpu,
-            #     )
-
-            #     if args.colocate_actor_ref or args.colocate_all_models:
-            #         ray.get([base_action_log_probs_ref])
-            #         ray.get([self.initial_model.empty_cache.remote()])
-            # else:
-            #     base_action_log_probs_ref = ray.put([None])
-
             # Process actor model chunk
             actor_vis_inputs = None if vis_inputs_chunk is None else {k: v.to(device) for k, v in vis_inputs_chunk.items() if k != "input_ids" and k != "attention_mask"}
             
@@ -737,19 +782,11 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
                 visual_inputs=actor_vis_inputs,
             )
 
-            # # Get base action log probs and clear memory
-            # base_action_log_probs_chunk = ray.get([base_action_log_probs_ref])[0]
-            # if base_action_log_probs_chunk is not None:
-            #     base_action_log_probs_chunk = base_action_log_probs_chunk.to(device)
-            # all_base_action_log_probs.append(base_action_log_probs_chunk)
-
             # Store results
             all_action_log_probs.append(action_log_probs_chunk)
 
             # Clear memory
             del seq_chunk, attn_chunk, action_mask_chunk, packed_seq_chunk, vis_inputs_chunk
-            # del seq_chunk_cpu, attn_chunk_cpu, vis_inputs_chunk_cpu
-            # del action_log_probs_chunk, base_action_log_probs_chunk
             torch.cuda.empty_cache()
 
         
@@ -760,10 +797,6 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         
         # # Concatenate results
         action_log_probs = torch.cat(all_action_log_probs, dim=0)
-        # if all_base_action_log_probs[0] is not None:
-        #     base_action_log_probs = torch.cat(all_base_action_log_probs, dim=0)
-        # else:
-        #     base_action_log_probs = None
 
         actor_value_rm_time = time.time() - start_time
         start = time.time()
@@ -773,10 +806,6 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         if args.colocate_actor_ref or args.colocate_all_models:
             torch.cuda.synchronize()
             torch.cuda.empty_cache()
-
-        # # Make experience objects
-        # if base_action_log_probs is not None:
-        #     base_action_log_probs = base_action_log_probs.to(device)
 
         rewards = mini_batch.rewards
         r = rewards.to(device)
@@ -848,7 +877,191 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             action_mask=mini_batch.action_mask,
             info=info,
             kl=kl,
-            visual_inputs=visual_inputs
+            visual_inputs=visual_inputs,
+            sequences_for_KL=mini_batch.sequences_for_KL if self.distillation else None,
+            attention_mask_for_KL=mini_batch.attention_mask_for_KL if self.distillation else None,
+            action_mask_for_KL=mini_batch.action_mask_for_KL if self.distillation else None,
+            reward_diff=mini_batch.reward_diff if self.distillation else None,
+        )
+
+        self.actor.train()  # Reset model state
+        return experience
+    
+    @torch.no_grad()
+    def make_experience_language(self, mini_batch: RolloutStorage) -> Experience_CARDGAME:
+        """
+        Turn samples into experience by calculating logprobs, rewards, and kl divergence.
+        The size of each element in vllm_outputs corresponds to self.strategy.args.micro_rollout_batch_size.
+
+        This function does the following:
+        1. Get log_probs of the initial_model and base model to compute KL distance to refine reward values
+        2. Pack the above information into Experience dataclass
+        """
+        start_time = time.time()
+        args = self.strategy.args
+        self.actor.eval()
+        device = torch.cuda.current_device()
+
+        chunk_size = self.strategy.args.micro_train_batch_size
+
+        # Extract values from samples
+        sequences = mini_batch.sequences
+        attention_mask = mini_batch.attention_mask
+        action_mask = mini_batch.action_mask
+        packed_seq_lens = mini_batch.packed_seq_lens
+
+        # Split data into chunks
+        sequences_chunks = self.split_into_chunks(sequences, chunk_size)
+        attention_mask_chunks = self.split_into_chunks(attention_mask, chunk_size)
+        action_mask_chunks = self.split_into_chunks(action_mask, chunk_size)
+        packed_seq_lens_chunks = self.split_into_chunks(packed_seq_lens, chunk_size) if packed_seq_lens is not None else [None] * len(sequences_chunks)
+
+        # Move current chunk to CPU for remote processing
+        seq_chunk_cpu_list = [seq_chunk.to("cpu") for seq_chunk in sequences_chunks]
+        attn_chunk_cpu_list = [attn_chunk.to("cpu") for attn_chunk in attention_mask_chunks]
+        action_mask_chunk_cpu_list = [action_mask_chunk.to("cpu") for action_mask_chunk in action_mask_chunks]
+        logps_allgather_list = [True] * len(seq_chunk_cpu_list)
+        
+        
+        # Process initial model chunk
+        if self.initial_model is not None:
+            base_action_log_probs_ref = self.initial_model.forward_batch.remote(
+                sequences=seq_chunk_cpu_list,
+                action_mask=action_mask_chunk_cpu_list,
+                attention_mask=attn_chunk_cpu_list,
+                logps_allgather=logps_allgather_list,
+            )
+
+            if args.colocate_actor_ref or args.colocate_all_models:
+                ray.get([base_action_log_probs_ref])
+                ray.get([self.initial_model.empty_cache.remote()])
+        else:
+            base_action_log_probs_ref = ray.put([None] * len(seq_chunk_cpu_list))
+        
+        
+        # Initialize lists to store results
+        all_action_log_probs = []
+
+        # Process each chunk
+        for i in range(len(sequences_chunks)):
+            # Clear GPU cache before processing new chunk
+            torch.cuda.empty_cache()
+
+            # Get current chunk
+            seq_chunk = sequences_chunks[i]
+            attn_chunk = attention_mask_chunks[i]
+            action_mask_chunk = action_mask_chunks[i]
+            packed_seq_chunk = packed_seq_lens_chunks[i]
+
+            action_log_probs_chunk = self.actor(
+                seq_chunk.to(device),
+                action_mask_chunk,
+                attn_chunk.to(device),
+                ring_attn_group=self.strategy.ring_attn_group,
+                logps_allgather=True,
+                packed_seq_lens=packed_seq_chunk,
+            )
+
+            # Store results
+            all_action_log_probs.append(action_log_probs_chunk)
+
+            # Clear memory
+            del seq_chunk, attn_chunk, action_mask_chunk, packed_seq_chunk
+            torch.cuda.empty_cache()
+
+        
+        base_action_log_probs_list = ray.get([base_action_log_probs_ref])[0]
+        if base_action_log_probs_list[0] is not None:
+            base_action_log_probs_list = [base_action_log_probs_list[i].to(device) for i in range(len(base_action_log_probs_list))]
+        base_action_log_probs = torch.cat(base_action_log_probs_list, dim=0)
+        
+        # # Concatenate results
+        action_log_probs = torch.cat(all_action_log_probs, dim=0)
+
+        actor_value_rm_time = time.time() - start_time
+        start = time.time()
+        wait_time = time.time() - start
+
+        # Avoid CUDA OOM when colocate models
+        if args.colocate_actor_ref or args.colocate_all_models:
+            torch.cuda.synchronize()
+            torch.cuda.empty_cache()
+
+        rewards = mini_batch.rewards
+        r = rewards.to(device)
+
+        if (self.initial_model is not None) and (not args.use_kl_loss):
+            kl = compute_approx_kl(
+                action_log_probs,
+                base_action_log_probs,
+                action_mask=mini_batch.action_mask,
+                kl_estimator=self.strategy.args.kl_estimator,
+            )
+        else:
+            kl = torch.zeros_like(action_log_probs, dtype=action_log_probs.dtype, device=device)
+
+        sequences = mini_batch.sequences
+        attention_mask = mini_batch.attention_mask
+        if not self.packing_samples:
+            kl_mean = masked_mean(kl, mini_batch.action_mask, dim=-1)
+        else:
+            num_actions = mini_batch.num_actions
+            packed_seq_lens = mini_batch.packed_seq_lens
+            if self.strategy.ring_attn_group is not None:
+                assert mini_batch.pad_len is not None
+                sequences, attention_mask, num_actions, packed_seq_lens, _, _, kl = unpad_sequences(
+                    pad_len=mini_batch.pad_len,
+                    sequences=sequences,
+                    attention_mask=attention_mask,
+                    num_actions=num_actions,
+                    packed_seq_lens=packed_seq_lens,
+                    ring_attn_group=self.strategy.ring_attn_group,
+                    action_log_probs=action_log_probs,
+                    values=None,
+                    kl=kl,
+                )
+            # Convert tensor into list of tensors for easier manipulation within dataset
+            sequences = unpacking_samples(sequences, packed_seq_lens)
+            attention_mask = None
+            action_log_probs = unpacking_samples(action_log_probs, num_actions)
+            if base_action_log_probs is not None:
+                base_action_log_probs = unpacking_samples(base_action_log_probs, num_actions)
+
+            kl = unpacking_samples(kl, num_actions)
+            kl_mean = torch.tensor([each_kl.mean() for each_kl in kl], device=device)
+
+        if not args.use_kl_loss:
+            base_action_log_probs = None
+
+        info = {
+            "kl": kl_mean,
+            "reward": r,
+            "return": mini_batch.returns,
+            "response_length": mini_batch.response_length,
+            "total_length": mini_batch.total_length,
+            "num_actions": mini_batch.num_actions,
+        }
+
+        if self.strategy.args.perf:
+            self.perf_stats["actor_value_rm_time"] += actor_value_rm_time
+            self.perf_stats["wait_time"] += wait_time
+
+        experience = Experience_CARDGAME(
+            sequences,
+            action_log_probs,
+            base_action_log_probs,
+            values=None,
+            returns=mini_batch.returns,
+            advantages=mini_batch.returns,
+            attention_mask=attention_mask,
+            action_mask=mini_batch.action_mask,
+            info=info,
+            kl=kl,
+            visual_inputs=None,
+            sequences_for_KL=mini_batch.sequences_for_KL if self.distillation else None,
+            attention_mask_for_KL=mini_batch.attention_mask_for_KL if self.distillation else None,
+            action_mask_for_KL=mini_batch.action_mask_for_KL if self.distillation else None,
+            reward_diff=mini_batch.reward_diff if self.distillation else None,
         )
 
         self.actor.train()  # Reset model state
@@ -1015,6 +1228,106 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         )
 
         return mini_batch
+
+    def _generate_vllm_language(self, messages: List[dict], **kwargs) -> RolloutStorage:
+        rank = torch.distributed.get_rank() // self.strategy.ring_attn_size
+        world_size = torch.distributed.get_world_size() // self.strategy.ring_attn_size
+
+        # Select LLM engines: assign each rank an engine, or cycle through engines if world_size < engine_count
+        if len(self.vllm_engines) <= world_size:
+            llms = [self.vllm_engines[rank % len(self.vllm_engines)]]
+        else:
+            llms = self.vllm_engines[rank::world_size]
+
+        sampling_params = SamplingParams(
+            temperature=kwargs.get("temperature", 1.0),
+            top_p=kwargs.get("top_p", 1.0),
+            top_k=kwargs.get("top_k", -1),
+            max_tokens=kwargs.get("max_new_tokens", self.strategy.args.generate_max_len),
+            min_tokens=kwargs.get("min_new_tokens", 16),
+            skip_special_tokens=kwargs.get("skip_special_tokens", False),
+            include_stop_str_in_output=True,
+        )
+
+        batch_size = (len(messages) + len(llms) - 1) // len(llms)
+
+        refs = []
+        prompts = []
+        for i, llm in enumerate(llms):
+            msg = messages[i * batch_size : (i + 1) * batch_size]
+            prompt = self.processor.apply_chat_template(msg, tokenize=False, add_generation_prompt=True)
+            flattened_prompts = [p for p in prompt]
+            prompts.extend(flattened_prompts)
+            refs.append(llm.add_requests.remote(rank, sampling_params=sampling_params, vllm_vision_input=prompt))
+
+        ray.get(refs)
+
+        # Retrieve and combine results from all outputs
+        all_output_refs = []
+        for i, llm in enumerate(llms):
+            all_output_refs.append(llm.get_responses.remote(rank))
+        all_outputs = sum(ray.get(all_output_refs), [])
+
+        model_responses_list = []
+        for output in all_outputs:
+            model_responses_list.append(output.outputs[0].text)
+
+        # NOTE: concat all outputs to following format:
+        #
+        # | [PAD] [PAD] token token token | token token [EOS] [PAD] |
+        # | token token token token token | token token [EOS] [PAD] |
+        # | [PAD] [PAD] [PAD] token token | token token token [EOS] |
+        # |<---------- prompt ----------->|<-------- answer ------->|
+        max_input_len, max_output_len = 0, 0
+        for output in all_outputs:
+            max_input_len = max(max_input_len, len(output.prompt_token_ids))
+            max_output_len = max(max_output_len, len(output.outputs[0].token_ids))
+
+        pad_token_id, eos_token_id = self.tokenizer.pad_token_id, self.tokenizer.eos_token_id
+        sequences = []
+        for j, output in enumerate(all_outputs):
+            # left padding input
+            input_len = len(output.prompt_token_ids)
+            input_ids = [pad_token_id] * (max_input_len - input_len) + list(output.prompt_token_ids)
+            # right padding output
+            output_len = len(output.outputs[0].token_ids)
+            output_ids = list(output.outputs[0].token_ids) + [pad_token_id] * (max_output_len - output_len)
+            # concat input and output
+            sequences.append(input_ids + output_ids)
+
+        sequences = torch.tensor(sequences)
+        sequences, attention_mask, action_mask = self.actor.process_sequences(
+            sequences, max_input_len, eos_token_id, pad_token_id
+        )
+        sequences = sequences.to("cuda")
+        attention_mask = attention_mask.to("cuda")
+        action_mask = action_mask.to("cuda")
+
+        self.response_length_list.extend(attention_mask.float().sum(dim=-1).tolist())
+
+        mini_batch = RolloutStorage(
+                        sequences=sequences,
+                        attention_mask=attention_mask,
+                        action_mask=action_mask,
+                        num_actions=action_mask.size(1),
+                        packed_seq_lens=None,
+                        response_length=action_mask.float().sum(dim=-1),
+                        total_length=attention_mask.float().sum(dim=-1),
+                        visual_inputs=None,
+                        pad_len=None,
+                        output_text=model_responses_list,
+                        obs=None,
+                        rewards=None,
+                        masks=None,
+                        bad_masks=None,
+                        action_log_probs=None,
+                        prompt=prompts,
+                        sequences_for_KL=sequences if self.distillation else None,
+                        attention_mask_for_KL=attention_mask if self.distillation else None,
+                        action_mask_for_KL=action_mask if self.distillation else None,
+        )
+
+        return mini_batch
     
     def get_feedbacks(self, task_prompt: str, obs_batch: List[Image.Image], info_batch: dict,
                       previous_responses: List[List[str]], previous_verify_infos: List[List[str]], previous_feedbacks: List[List[str]], 
@@ -1091,7 +1404,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         
         return feedbacks
     
-    def get_feedbacks_from_LLMTeacher(self, task_prompt: str, info_batch: dict,
+    def get_feedbacks_from_LLMTeacher(self, task_prompts: List[str], info_batch: dict,
                       previous_responses: List[List[str]], previous_verify_infos: List[List[str]], previous_feedbacks: List[List[str]], 
                       multimodal=True, **kwargs) -> List[str]:
         """
@@ -1119,31 +1432,13 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             include_stop_str_in_output=False,
         )
 
-        feedback_prompts = self.formulate_feedback_prompt_for_LLMTeacher(task_prompt, info_batch, previous_responses, previous_feedbacks, previous_verify_infos)
+        feedback_prompts = self.formulate_feedback_prompt_for_LLMTeacher(task_prompts, info_batch, previous_responses, previous_feedbacks, previous_verify_infos)
         batch_size = (len(feedback_prompts) + len(llms) - 1) // len(llms)
 
-        # Prepare inputs for vLLM
         refs = []
-        # vllm_inputs = []
-        # if multimodal:
-        #     for i, llm in enumerate(llms):
-        #         msg_batch = feedback_prompts[i * batch_size : (i + 1) * batch_size]
-        #         obs_batch_slice = obs_batch[i * batch_size : (i + 1) * batch_size]
-        #         prompts = self.processor.apply_chat_template(msg_batch, tokenize=False, add_generation_prompt=True)
-        #         vllm_inputs = [
-        #             {
-        #                 "prompt": prompt,
-        #                 "multi_modal_data": {"image": obs},
-        #                 "mm_processor_kwargs": kwargs["processor_kwargs"]
-        #             }
-        #             for prompt, obs in zip(prompts, obs_batch_slice)
-        #         ]
-        #         refs.append(llm.add_requests.remote(rank, sampling_params=sampling_params, vllm_vision_input=vllm_inputs))
-
-        # else:
         for i, llm in enumerate(llms):
             msg = feedback_prompts[i * batch_size : (i + 1) * batch_size]
-            prompt = self.processor.apply_chat_template(msg, tokenize=False, add_generation_prompt=True)
+            prompt = self.feedback_processor.apply_chat_template(msg, tokenize=False, add_generation_prompt=True)
             refs.append(llm.add_requests.remote(rank, sampling_params=sampling_params, vllm_vision_input=prompt))
 
         ray.get(refs)
@@ -1163,7 +1458,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         for output in all_outputs:
             feedbacks.append(output.outputs[0].text)
         
-        return feedbacks
+        return feedbacks, feedback_prompts
     
     def _generate_vllm_with_feedback(
         self, 
@@ -1391,7 +1686,182 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         #     )
         return mini_batch
 
+    def _generate_vllm_with_feedback_language(
+        self, 
+        messages: List[dict],
+        messages_no_feedback: List[dict],
+        **kwargs) -> RolloutStorage:
+        """
+        Generate new samples with feedbacks from the base model.
+        For RL training, concat the original prompt ids and the new output ids.
+        """
+        
+        self.response_length_list = []
+        rank = torch.distributed.get_rank() // self.strategy.ring_attn_size
+        world_size = torch.distributed.get_world_size() // self.strategy.ring_attn_size
+        if len(self.vllm_engines) <= world_size:
+            llms = [self.vllm_engines[rank % len(self.vllm_engines)]]
+        else:
+            llms = self.vllm_engines[rank::world_size]
+
+        sampling_params = SamplingParams(
+            temperature=kwargs.get("temperature", 1.0),
+            top_p=kwargs.get("top_p", 1.0),
+            top_k=kwargs.get("top_k", -1),
+            max_tokens=kwargs.get("max_new_tokens", self.strategy.args.generate_max_len),
+            min_tokens=kwargs.get("min_new_tokens", 16),
+            skip_special_tokens=kwargs.get("skip_special_tokens", False),
+            include_stop_str_in_output=True,
+        )
+
+        feedback_prompts_texts = [
+            self.processor.apply_chat_template(msg, tokenize=False, add_generation_prompt=True)
+            for msg in messages
+        ]
+
+        base_prompts_ids = [
+            self.processor.apply_chat_template(msg, tokenize=True, add_generation_prompt=True)
+            for msg in messages_no_feedback
+        ]
+        # base_prompts_ids = [base_prompt_ids[0] for base_prompt_ids in base_prompts_ids]
+        batch_size = (len(messages) + len(llms) - 1) // len(llms)
+
+        refs = []
+        for i, llm in enumerate(llms):
+            msg =  messages[i * batch_size : (i + 1) * batch_size]
+            prompt = self.processor.apply_chat_template(msg, tokenize=False, add_generation_prompt=True)
+            refs.append(llm.add_requests.remote(rank, sampling_params=sampling_params, vllm_vision_input=prompt))
+
+        ray.get(refs)
+
+        # Retrieve and combine results from all outputs
+        all_output_refs = []
+        for i, llm in enumerate(llms):
+            all_output_refs.append(llm.get_responses.remote(rank))
+        all_outputs = sum(ray.get(all_output_refs), [])
+
+        output_list = []
+        for output in all_outputs:
+            output_list.append(output.outputs[0].text)
+
+        if not self.packing_samples:
+            # NOTE: concat all outputs to following format:
+            #
+            # | [PAD] [PAD] token token token | token token [EOS] [PAD] |
+            # | token token token token token | token token [EOS] [PAD] |
+            # | [PAD] [PAD] [PAD] token token | token token token [EOS] |
+            # |<---------- prompt ----------->|<-------- answer ------->|
+            max_input_len, max_output_len = 0, 0
+            for j in range(len(base_prompts_ids)):
+                max_input_len = max(max_input_len, len(base_prompts_ids[j]))
+            for output in all_outputs:
+                # max_input_len = max(max_input_len, len(output.prompt_token_ids))
+                max_output_len = max(max_output_len, len(output.outputs[0].token_ids))
+
+            max_input_len_for_KL = 0
+            for output in all_outputs:
+                max_input_len_for_KL = max(max_input_len_for_KL, len(output.prompt_token_ids))
+            pad_token_id, eos_token_id = self.tokenizer.pad_token_id, self.tokenizer.eos_token_id
+            sequences = []
+            sequences_for_KL = []
+            for j, output in enumerate(all_outputs):
+                input_len = len(base_prompts_ids[j])
+                input_ids = [pad_token_id] * (max_input_len - input_len) + list(base_prompts_ids[j])
+                output_len = len(output.outputs[0].token_ids)
+                output_ids = list(output.outputs[0].token_ids) + [pad_token_id] * (max_output_len - output_len)
+                sequences.append(input_ids + output_ids)
+                
+                if self.distillation:
+                    input_len = len(output.prompt_token_ids)
+                    input_feedback_ids = [pad_token_id] * (max_input_len_for_KL - input_len) + list(output.prompt_token_ids)
+                    output_feedback_ids = list(output.outputs[0].token_ids) + [pad_token_id] * (max_output_len - output_len)
+                    sequences_for_KL.append(input_feedback_ids + output_feedback_ids)
+                    # assert len(sequences_for_KL[-1]) == len(sequences[-1]), f"len(sequences_for_KL[-1]): {len(sequences_for_KL[-1])}, len(sequences[-1]): {len(sequences[-1])}"
+
+            sequences = torch.tensor(sequences)
+            sequences, attention_mask, action_mask = self.process_sequences_v2(
+                sequences, max_output_len, eos_token_id, pad_token_id
+            )
+            sequences = sequences.to("cuda")
+            attention_mask = attention_mask.to("cuda")
+            action_mask = action_mask.to("cuda")
+            self.response_length_list.extend(attention_mask.float().sum(dim=-1).tolist())
+
+            if self.distillation:
+                sequences_for_KL = torch.tensor(sequences_for_KL)
+                sequences_for_KL, attention_mask_for_KL, action_mask_for_KL = self.process_sequences_v2(
+                    sequences_for_KL, max_output_len, eos_token_id, pad_token_id
+                )
+                sequences_for_KL = sequences_for_KL.to("cpu")
+                attention_mask_for_KL = attention_mask_for_KL.to("cpu")
+                action_mask_for_KL = action_mask_for_KL.to("cpu")
+                assert action_mask_for_KL.size(1) == action_mask.size(1), f"action_mask_for_KL.size(1): {action_mask_for_KL.size(1)}, action_mask.size(1): {action_mask.size(1)}"
+
+            
+            mini_batch = RolloutStorage(
+                            sequences=sequences,
+                            attention_mask=attention_mask,
+                            action_mask=action_mask,
+                            num_actions=action_mask.size(1),
+                            packed_seq_lens=None,
+                            response_length=action_mask.float().sum(dim=-1),
+                            total_length=attention_mask.float().sum(dim=-1),
+                            visual_inputs=None,
+                            pad_len=None,
+                            output_text=output_list,
+                            obs=None,
+                            rewards=None,
+                            masks=None,
+                            bad_masks=None,
+                            action_log_probs=None,
+                            prompt = feedback_prompts_texts,
+                            sequences_for_KL=sequences_for_KL if self.distillation else None,
+                            attention_mask_for_KL=attention_mask_for_KL if self.distillation else None,
+                            action_mask_for_KL=action_mask_for_KL if self.distillation else None
+            )
+        return mini_batch
+
     
+    def process_sequences_v2(self, sequences: torch.Tensor, ouput_len, eos_token_id, pad_token_id):
+        """
+        Process generated sequences to create attention masks and action masks.
+
+        Args:
+            sequences (torch.Tensor): Generated sequence tensor
+            input_len (int): Length of the input sequence
+            eos_token_id (int): Token ID for the end-of-sequence token
+            pad_token_id (int): Token ID for the padding token
+
+        Returns:
+            tuple: A tuple containing three elements:
+                - sequences: Original sequence
+                - attention_mask: Attention mask indicating valid token positions
+                - action_mask: Action mask indicating valid action token positions
+        """
+        # Create initial attention mask by marking positions that are neither EOS nor padding tokens
+        attention_mask = (sequences.ne(eos_token_id) & sequences.ne(pad_token_id)).to(dtype=torch.long)
+        seq_length = attention_mask.size(1)
+
+        # Find the position of the last valid token in each sequence
+        eos_indices = seq_length - attention_mask.long().fliplr().argmax(dim=1, keepdim=True).clamp(min=1)
+
+        # Handle cases where EOS tokens might appear in the middle of the prompt (for Llama3 and Qwen2 models)
+        # Find the position of the first valid token in each sequence
+        first_token_indices = attention_mask.long().argmax(dim=1, keepdim=True)
+        # Create position mask
+        mask = torch.arange(seq_length).unsqueeze(0).expand(sequences.size(0), -1).to(device=sequences.device)
+        # Generate final attention mask, keeping only positions between first and last valid tokens
+        attention_mask = (mask >= first_token_indices) & (mask <= eos_indices).to(dtype=torch.long)
+
+        # In reinforcement learning, the state transition is represented as:
+        # state_i (current token) + action_i (next token) -> state_i+1 (next token)
+        # Generate state sequence from input_len-1 to second-to-last token
+        state_seq = sequences[:, -ouput_len: -1]
+        # Generate action mask indicating valid action token positions
+        action_mask = state_seq.ne(eos_token_id) & state_seq.ne(pad_token_id)
+        action_mask[:, 0] = 1
+
+        return sequences, attention_mask, action_mask
     
     
     

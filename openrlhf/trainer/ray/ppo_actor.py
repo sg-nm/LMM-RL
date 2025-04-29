@@ -7,6 +7,7 @@ import socket
 import json
 import random
 import time
+import copy
 import yaml
 from typing import Callable, Dict, List, Optional, Tuple, Union
 from tqdm import tqdm
@@ -49,11 +50,12 @@ from card_env.gym_cards.config_dataclass import EnvConfig, PromptConfig, load_co
 from card_env.gym_cards.envs.general_points_oneline import GeneralPointEnv_oneline
 
 
-def make_env(env_config: Union[EnvConfig, EvalEnvConfig], language_only=False, seed=42):
+def make_env(env_config: Union[EnvConfig, EvalEnvConfig], language_only=False, seed=42, ood=False):
     def _init():
         config_dict = {k: v for k, v in vars(env_config).items() if k != "id" and k != "num_steps" and k != "num_evaluations"}
         config_dict["language_only"] = language_only
         config_dict["seed"] = seed
+        config_dict["ood"] = ood
         return GeneralPointEnv_oneline(**config_dict)
         # env = GeneralPointEnv_oneline(**vars(env_config), language_only=language_only)
         # return env
@@ -1554,9 +1556,12 @@ class ActorModelRayActor_Card(BasePPORole):
             min_pixels = 256*28*28
             max_pixels = 1280*28*28
             self.data_processor = AutoProcessor.from_pretrained(pretrain, padding_side="left", min_pixels=min_pixels, max_pixels=max_pixels)
-            # self.data_processor = get_data_processor(pretrain, actor.model, "left", strategy, use_fast=not strategy.args.disable_fast_tokenizer)
+            if args.feedback_model:
+                self.feedback_data_processor = AutoProcessor.from_pretrained(args.feedback_model, padding_side="left")
         else:
-            self.data_processor = None
+            self.data_processor = AutoProcessor.from_pretrained(pretrain, padding_side="left")
+            if args.feedback_model:
+                self.feedback_data_processor = AutoProcessor.from_pretrained(args.feedback_model, padding_side="left")
         self.tokenizer = get_tokenizer(pretrain, actor.model, "left", strategy, use_fast=not strategy.args.disable_fast_tokenizer)
 
         if args.enable_ema:
@@ -1581,14 +1586,6 @@ class ActorModelRayActor_Card(BasePPORole):
 
         # configure scheduler
         self.num_update_steps_per_episodes = (self.num_steps * self.num_envs * args.max_epochs // args.train_batch_size)
-        # num_rollouts_per_episodes = (
-        #     self.num_update_steps_per_episodes
-        #     * args.train_batch_size
-        #     // args.max_epochs
-        #     // args.rollout_batch_size
-        #     // args.n_samples_per_prompt
-        # )
-        # assert num_rollouts_per_episodes != 0, f"num_rollouts_per_episodes is 0. {args.train_batch_size}, {args.max_epochs}, {args.rollout_batch_size}, {args.n_samples_per_prompt}"
 
         max_steps = math.ceil(args.num_episodes * self.num_update_steps_per_episodes)
         self._max_steps = max_steps
@@ -1639,8 +1636,14 @@ class ActorModelRayActor_Card(BasePPORole):
         self.pretrain_dataloader = None
 
         self.configs = load_config_from_yaml(args.env_config)
+        if args.multimodal:
+            self.configs.prompt_config.use_vision = True
+        else:
+            self.configs.prompt_config.use_vision = False
+            self.configs.prompt_config.use_language = True
         self.action_space = []
         self.num_envs = self.configs.num_envs
+        self.num_eval_envs = self.configs.num_eval_envs
         self.num_steps = self.configs.env_config.num_steps
         self.num_updates = self.configs.num_updates
         self.compute_return_kwargs = self.configs.compute_return_kwargs
@@ -1650,8 +1653,8 @@ class ActorModelRayActor_Card(BasePPORole):
         try:
             print(f"Creating {self.num_envs} parallel environments...")
             # context="spawn" is often more robust, especially on Windows/macOS
-            # self.envs = gym.vector.AsyncVectorEnv(env_fns, context="spawn", autoreset_mode=gym.vector.AutoresetMode.NEXT_STEP)
-            self.envs = gym.vector.AsyncVectorEnv(env_fns, autoreset_mode=gym.vector.AutoresetMode.NEXT_STEP)
+            self.envs = gym.vector.AsyncVectorEnv(env_fns, autoreset_mode=gym.vector.AutoresetMode.SAME_STEP)
+            # self.envs = gym.vector.AsyncVectorEnv(env_fns, autoreset_mode=gym.vector.AutoresetMode.NEXT_STEP)
             print("Environments created.")
         except Exception as e:
             print(f"\nAn error occurred: {e}")
@@ -1660,8 +1663,32 @@ class ActorModelRayActor_Card(BasePPORole):
 
         if args.eval:
             try:
-                env_fns = [make_env(self.configs.eval_env_config, language_only=self.configs.prompt_config.use_language, seed=args.seed + 10*(idx+1)) for idx in range(self.num_envs)]
-                self.eval_envs = gym.vector.AsyncVectorEnv(env_fns, autoreset_mode=gym.vector.AutoresetMode.NEXT_STEP)
+                # in-distribution
+                env_fns = [make_env(self.configs.eval_env_config, language_only=self.configs.prompt_config.use_language, seed=args.seed + 10*(idx+1), ood=False) for idx in range(self.num_eval_envs)]
+                self.iid_eval_envs = gym.vector.AsyncVectorEnv(env_fns, autoreset_mode=gym.vector.AutoresetMode.NEXT_STEP)
+                self.iid_eval_config = copy.deepcopy(self.configs.eval_env_config)
+                # ood (change the rule of the face cards)
+                self.configs.eval_env_config.treat_face_cards_as_10 = False
+                env_fns = [make_env(self.configs.eval_env_config, language_only=self.configs.prompt_config.use_language, seed=args.seed + 100*(idx+1), ood=True) for idx in range(self.num_eval_envs)]
+                self.ood_rule_eval_envs = gym.vector.AsyncVectorEnv(env_fns, autoreset_mode=gym.vector.AutoresetMode.NEXT_STEP)
+                self.ood_rule_eval_config = copy.deepcopy(self.configs.eval_env_config)
+                if args.multimodal:
+                    # ood (change cards' visual appearance)
+                    self.configs.eval_env_config.treat_face_cards_as_10 = True
+                    self.configs.eval_env_config.face_cards_color = "red"
+                    env_fns = [make_env(self.configs.eval_env_config, language_only=self.configs.prompt_config.use_language, seed=args.seed + 1000*(idx+1), ood=True) for idx in range(self.num_eval_envs)]
+                    self.ood_visual_eval_envs = gym.vector.AsyncVectorEnv(env_fns, autoreset_mode=gym.vector.AutoresetMode.NEXT_STEP)
+                    self.ood_visual_eval_config = copy.deepcopy(self.configs.eval_env_config)
+                    self.eval_envs = [self.iid_eval_envs, self.ood_rule_eval_envs, self.ood_visual_eval_envs]
+                    self.eval_env_configs = [self.iid_eval_config, self.ood_rule_eval_config, self.ood_visual_eval_config]
+                else:
+                    self.configs.eval_env_config.treat_face_cards_as_10 = True
+                    self.configs.eval_env_config.target_points = 36
+                    env_fns = [make_env(self.configs.eval_env_config, language_only=self.configs.prompt_config.use_language, seed=args.seed + 1000*(idx+1), ood=True) for idx in range(self.num_eval_envs)]
+                    self.ood_num_eval_envs = gym.vector.AsyncVectorEnv(env_fns, autoreset_mode=gym.vector.AutoresetMode.NEXT_STEP)
+                    self.ood_num_eval_config = copy.deepcopy(self.configs.eval_env_config)
+                    self.eval_envs = [self.iid_eval_envs, self.ood_rule_eval_envs, self.ood_num_eval_envs]
+                    self.eval_env_configs = [self.iid_eval_config, self.ood_rule_eval_config, self.ood_num_eval_config]
                 print("Eval environments created.")
             except Exception as e:
                 print(f"\nAn error occurred: {e}")
@@ -1710,6 +1737,7 @@ class ActorModelRayActor_Card(BasePPORole):
             gradient_checkpointing=args.gradient_checkpointing,
             critic_train_remote=critic_train_remote,
             data_processor=self.data_processor,
+            feedback_data_processor=self.feedback_data_processor,
             tokenizer=self.tokenizer,
             prompt_max_len=args.prompt_max_len,
             value_clip=args.value_clip,
@@ -1736,7 +1764,7 @@ class ActorModelRayActor_Card(BasePPORole):
             envs=self.envs,
             eval_envs=self.eval_envs,
             env_config=self.configs.env_config,
-            eval_env_config=self.configs.eval_env_config,
+            eval_env_configs=self.eval_env_configs,
             prompt_config=self.configs.prompt_config,
         )
 
@@ -1794,9 +1822,9 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
         remote_rm_url: List[str] = None,
         critic_train_remote: bool = False,
         envs: gym.vector.AsyncVectorEnv = None,
-        eval_envs: gym.vector.AsyncVectorEnv = None,
+        eval_envs: Union[gym.vector.AsyncVectorEnv, List[gym.vector.AsyncVectorEnv]] = None,
         env_config: EnvConfig = None,
-        eval_env_config: EvalEnvConfig = None,
+        eval_env_configs: Union[EvalEnvConfig, List[EvalEnvConfig]] = None,
         prompt_config: PromptConfig = None,
         **kwargs,
     ):
@@ -1809,6 +1837,7 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
         """
         # kwargs から 'data_processor' を取得し、同時に kwargs から削除する
         ppo_data_processor = kwargs.pop('data_processor', None)
+        ppo_feedback_data_processor = kwargs.pop('feedback_data_processor', None)
         # remote_rm_url も同様に kwargs から削除 (必要であれば)
         # super には渡さない想定であれば pop するだけでよい
         kwargs.pop('remote_rm_url', None) # super に渡さないので値は不要
@@ -1836,8 +1865,9 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
         self.envs = envs
         self.env_config = env_config
         self.eval_envs = eval_envs
-        self.eval_env_config = eval_env_config
+        self.eval_env_configs = eval_env_configs
         self.prompt_config = prompt_config
+        self.feedback_data_processor = ppo_feedback_data_processor
 
         # override replay buffer
         packing_samples = getattr(self.strategy.args, "packing_samples", False)
@@ -1857,6 +1887,7 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
             initial_model=self.initial_model,
             tokenizer=self.tokenizer,
             data_processor=self.data_processor,
+            feedback_data_processor=self.feedback_data_processor,
             prompt_max_len=self.prompt_max_len,
             kl_controller=self.kl_ctl,
             strategy=self.strategy,
@@ -1934,11 +1965,13 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
             torch.distributed.barrier()
             torch.cuda.synchronize()
 
-        if (global_steps == 0 or global_steps == 1) and self.strategy.args.eval:
-            success_rate = self.evaluate()
+        if global_steps == 0 and self.strategy.args.eval:
+            success_rate_dict = self.evaluate()
+            for k, v in success_rate_dict.items():
+                status[k] = v
             if self.strategy.is_rank_0():
-                print(f"Init eval success rate: {success_rate}")
-            status["eval_success_rate"] = success_rate
+                print(f"Init eval success rate: {success_rate_dict}")
+            # status["eval_success_rate"] = success_rate
             if self.strategy.is_rank_0() and self._wandb is not None:
                 logs = {
                     "train/%s" % k: v
@@ -2001,14 +2034,15 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
         torch.distributed.barrier()
 
         # 6. evaluate
-        if self.strategy.args.eval:
+        if self.strategy.args.eval and global_steps % 2 == 0:
             if self.strategy.args.vllm_enable_sleep:
                 from openrlhf.trainer.ray.vllm_engine import batch_vllm_engine_call
                 batch_vllm_engine_call(self.vllm_engines, "wake_up")
                 torch.distributed.barrier()
                 torch.cuda.synchronize()
-            success_rate = self.evaluate()
-            status["eval_success_rate"] = success_rate
+            success_rate_dict = self.evaluate()
+            for k, v in success_rate_dict.items():
+                status[k] = v
 
             if self.strategy.args.vllm_enable_sleep:
                 batch_vllm_engine_call(self.vllm_engines, "sleep")
@@ -2021,32 +2055,32 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
     def training_step(self, experience: Experience, global_steps) -> Dict[str, float]:
         return self.training_step_actor(experience)
 
-    # def _get_leaf_modules(self,model,use_lora):
-    #     leaf_modules = []
-    #     lora_module_keyword = ["lora_","base_layer"]
-    #     class IsoParamWrapper:
-    #         """
-    #         Some modules may have isolated parameters that are not in submodules.
-    #         This class wraps such parameters in a module so that they can be treated uniformly.
-    #         """
-    #         def __init__(self, name, parameter):
-    #             self.name = name
-    #             self.parameter = parameter
+    def _get_leaf_modules_LLM(self,model,use_lora):
+        leaf_modules = []
+        lora_module_keyword = ["lora_","base_layer"]
+        class IsoParamWrapper:
+            """
+            Some modules may have isolated parameters that are not in submodules.
+            This class wraps such parameters in a module so that they can be treated uniformly.
+            """
+            def __init__(self, name, parameter):
+                self.name = name
+                self.parameter = parameter
 
-    #         def named_parameters(self,prefix=None):
-    #             # self.name is already the full name. No need to add prefix
-    #             return [(self.name,self.parameter)]
+            def named_parameters(self,prefix=None):
+                # self.name is already the full name. No need to add prefix
+                return [(self.name,self.parameter)]
 
-    #     for name,module in model.named_modules():
-    #         if len(list(module.children())) == 0 or (use_lora and hasattr(module,"base_layer")):
-    #             leaf_modules.append((name,module))
-    #         else:
-    #             #find isolated parameter
-    #             for pname, p in module.named_parameters(recurse=False,prefix=name):
-    #                 leaf_modules.append((pname,IsoParamWrapper(pname,p)))
-    #     if use_lora:
-    #         leaf_modules = [(n,m) for n,m in leaf_modules if not any([keyword in n for keyword in lora_module_keyword])]
-    #     return leaf_modules
+        for name,module in model.named_modules():
+            if len(list(module.children())) == 0 or (use_lora and hasattr(module,"base_layer")):
+                leaf_modules.append((name,module))
+            else:
+                #find isolated parameter
+                for pname, p in module.named_parameters(recurse=False,prefix=name):
+                    leaf_modules.append((pname,IsoParamWrapper(pname,p)))
+        if use_lora:
+            leaf_modules = [(n,m) for n,m in leaf_modules if not any([keyword in n for keyword in lora_module_keyword])]
+        return leaf_modules
 
     
     ## NOTE: For Qwen2.5-VL
@@ -2164,23 +2198,6 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
                         else:
                             torch.distributed.broadcast(param.data, 0, group=self._model_update_group)
                         ray.get(refs)
-                    # # Clear active sub-modules before partitioning
-                    # if hasattr(param, 'ds_active_sub_modules'):
-                    #     # Store the active sub-modules to restore later
-                    #     active_sub_modules = param.ds_active_sub_modules.copy()
-                    #     param.ds_active_sub_modules.clear()
-                    # try:
-                    #     if torch.distributed.get_rank() == 0:
-                    #         if use_ray:
-                    #             import ray.util.collective as collective
-                    #             collective.broadcast(param.data, 0, group_name=self._model_update_group)
-                    #         else:
-                    #             torch.distributed.broadcast(param.data, 0, group=self._model_update_group)
-                    #         ray.get(refs)
-                    # finally:
-                    #     # Restore active sub-modules
-                    #     if hasattr(param, 'ds_active_sub_modules') and 'active_sub_modules' in locals():
-                    #         param.ds_active_sub_modules.update(active_sub_modules)
                             
             # CUDA IPC
             else:
@@ -2293,7 +2310,10 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
                 print("Warning: No layers found in model structure!")
 
         # リーフモジュールの収集（修正版）
-        leaf_modules = self._get_leaf_modules(model, use_lora)
+        if self.args.multimodal:
+            leaf_modules = self._get_leaf_modules(model, use_lora)
+        else:
+            leaf_modules = self._get_leaf_modules_LLM(model, use_lora)
         
         if self.strategy.is_rank_0():
             print(f"Total leaf modules to process: {len(leaf_modules)}")
@@ -2420,164 +2440,203 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
             include_stop_str_in_output=False,
         )
 
-        success  = 0
-        total = 0
-        num_envs = self.eval_envs.num_envs
-        history_length = 2
-        responses = []
-        oracle_arguments = self.formulate_oracle_arguments()
-        json_pattern = r"```json\n(.*?)\n```"
+        success_rates = []
+        success_nums = []
+        total_nums = []
 
-        if self.prompt_config.use_vision:
-            prompt_vision = PROMPT_FN[self.prompt_config.prompt_vision]
-            pattern_vision = self.prompt_config.pattern_vision
-        else:
-            prompt_language = PROMPT_FN[self.prompt_config.prompt_language]
-            pattern_language = self.prompt_config.pattern_language
+        for eval_env, eval_env_config in zip(self.eval_envs, self.eval_env_configs):
 
-        for t in range(self.eval_env_config.num_evaluations):
-            obs_batch, info_batch = self.eval_envs.reset()
-            if t == 0:
-                image = Image.fromarray(obs_batch[0])
-                
-            previous_responses = [[] for _ in range(num_envs)]
-            previous_verify_infos = [[] for _ in range(num_envs)]
-            active_envs = np.ones(num_envs, dtype=bool)  # Track which environments are still active
-            episode_rewards = np.zeros(num_envs)  # Track rewards for each environment
+            success  = 0
+            total = 0
+            num_envs = eval_env.num_envs
+            history_length = 2
+            responses = []
+            oracle_arguments = self.formulate_oracle_arguments(eval_env_config)
+            json_pattern = r"```json\n(.*?)\n```"
 
-            while active_envs.any():
-                vision_res_list = [{} for _ in range(num_envs)]
-                language_res_list = [{} for _ in range(num_envs)]
-                
-                if self.prompt_config.use_vision:
-                    prompt, pattern = prompt_vision, pattern_vision
-                else:
-                    prompt, pattern = prompt_language, pattern_language
+            if self.prompt_config.use_vision:
+                prompt_vision = PROMPT_FN[self.prompt_config.prompt_vision]
+                pattern_vision = self.prompt_config.pattern_vision
+            else:
+                prompt_language = PROMPT_FN[self.prompt_config.prompt_language]
+                pattern_language = self.prompt_config.pattern_language
 
-                # Only process active environments
-                active_indices = np.where(active_envs)[0]
-                active_obs_batch = obs_batch[active_envs]
-                active_previous_responses = [previous_responses[i] for i in active_indices]
-                active_previous_verify_infos = [previous_verify_infos[i] for i in active_indices]
+            for t in range(eval_env_config.num_evaluations):
+                obs_batch, info_batch = eval_env.reset()
+                if t == 0 and self.args.multimodal:
+                    image = Image.fromarray(obs_batch[0])
+                    
+                previous_responses = [[] for _ in range(num_envs)]
+                previous_verify_infos = [[] for _ in range(num_envs)]
+                active_envs = np.ones(num_envs, dtype=bool)  # Track which environments are still active
+                episode_rewards = np.zeros(num_envs)  # Track rewards for each environment
 
-                for i in active_indices:
-                    if 'cards' not in vision_res_list[i].keys():
-                        vision_res_list[i]['cards'] = info_batch['Plain Cards'][i]
-                
-                task_prompt = prompt.format(**vision_res_list[0], **language_res_list[0], **oracle_arguments)
-                messages = self.formulate_prompt(len(active_indices), 
-                                               task_prompt, 
-                                               obs_batch=active_obs_batch,
-                                               previous_responses=active_previous_responses,
-                                               previous_verify_infos=active_previous_verify_infos,
-                                               history_length=history_length)
-
-                batch_size = (len(messages) + len(llms) - 1) // len(llms)
-                refs = []
-                for i, llm in enumerate(llms):
-                    msg_batch = messages[i * batch_size : (i + 1) * batch_size]
-                    obs_batch_slice = active_obs_batch[i * batch_size : (i + 1) * batch_size]
-                    prompts = self.data_processor.apply_chat_template(msg_batch, tokenize=False, add_generation_prompt=True)
-                    vllm_inputs = [
-                        {
-                            "prompt": prompt,
-                            "multi_modal_data": {"image": obs},
-                        }
-                        for prompt, obs in zip(prompts, obs_batch_slice)
-                    ]
-                    refs.append(llm.add_requests.remote(rank, sampling_params=sampling_params, vllm_vision_input=vllm_inputs))
-                ray.get(refs)
-                if self.strategy.ring_attn_group is None:
-                    torch.distributed.barrier()
-                else:
-                    time.sleep(3)
-
-                all_output_refs = []
-                for i, llm in enumerate(llms):
-                    all_output_refs.append(llm.get_responses.remote(rank))
-                all_outputs = sum(ray.get(all_output_refs), [])
-
-                model_responses_list = []
-                for output in all_outputs:
-                    model_responses_list.append(output.outputs[0].text)
-
-                # Create a full-sized responses list with None for inactive environments
-                full_responses = [None] * num_envs
-                for response, idx in zip(model_responses_list, active_indices):
-                    full_responses[idx] = response
-
-                # preprocessing the model response to align with json style.
-                for i, model_response in enumerate(full_responses):
-                    if model_response is None:
-                        continue
-                    if "<|im_end|>" in model_response:
-                        model_response = model_response.replace("<|im_end|>", "")
-                    try:
-                        match = re.search(json_pattern, model_response, re.DOTALL)
-                    except TypeError as e:
-                        pass
-                    if match:
-                        full_responses[i] = match.group(1)
+                while active_envs.any():
+                    vision_res_list = [{} for _ in range(num_envs)]
+                    language_res_list = [{} for _ in range(num_envs)]
+                    
+                    if self.prompt_config.use_vision:
+                        prompt, pattern = prompt_vision, pattern_vision
                     else:
-                        full_responses[i] = model_response
-                obs_batch, rewards, terminations, truncations, info_batch = self.eval_envs.step(full_responses)
-                done = np.logical_or(terminations, truncations)
+                        prompt, pattern = prompt_language, pattern_language
 
-                # 報酬更新
-                for idx in active_indices:
-                    episode_rewards[idx] = rewards[idx]
+                    # Only process active environments
+                    active_indices = np.where(active_envs)[0]
+                    active_obs_batch = obs_batch[active_envs]
+                    active_previous_responses = [previous_responses[i] for i in active_indices]
+                    active_previous_verify_infos = [previous_verify_infos[i] for i in active_indices]
 
-                # 履歴更新
-                for idx, txt in zip(active_indices, model_responses_list):
-                    previous_responses[idx].append(txt)
-                    previous_verify_infos[idx].append(info_batch["Verify Info"][idx])
+                    for i in active_indices:
+                        if 'cards' not in vision_res_list[i].keys():
+                            vision_res_list[i]['cards'] = info_batch['Plain Cards'][i]
+                    
+                    task_prompts = [prompt.format(**vision_res_list[i], **language_res_list[i], **oracle_arguments) for i in active_indices]
+                    if self.args.multimodal:
+                        messages = self.formulate_prompt(len(active_indices), 
+                                                    task_prompts[0], 
+                                                    obs_batch=active_obs_batch,
+                                                    previous_responses=active_previous_responses,
+                                                    previous_verify_infos=active_previous_verify_infos,
+                                                    history_length=history_length)
+                    else:
+                        messages = self.formulate_prompt_for_LLMStudent(len(active_indices), task_prompts, 
+                                                                        active_previous_responses,
+                                                                        active_previous_verify_infos,
+                                                                        history_length=history_length)
 
-                # エピソード終了の処理
-                for idx in active_indices:
-                    if done[idx]:
-                        active_envs[idx] = False
-                        total += 1
-                        if episode_rewards[idx] > 4:
-                            success += 1
+                    batch_size = (len(messages) + len(llms) - 1) // len(llms)
+                    refs = []
+                    if self.args.multimodal:
+                        for i, llm in enumerate(llms):
+                            msg_batch = messages[i * batch_size : (i + 1) * batch_size]
+                            obs_batch_slice = active_obs_batch[i * batch_size : (i + 1) * batch_size]
+                            prompts = self.data_processor.apply_chat_template(msg_batch, tokenize=False, add_generation_prompt=True)
+                            vllm_inputs = [
+                                {
+                                    "prompt": prompt,
+                                    "multi_modal_data": {"image": obs},
+                                }
+                                for prompt, obs in zip(prompts, obs_batch_slice)
+                            ]
+                            refs.append(llm.add_requests.remote(rank, sampling_params=sampling_params, vllm_vision_input=vllm_inputs))
+                    else:
+                        for i, llm in enumerate(llms):
+                            msg_batch = messages[i * batch_size : (i + 1) * batch_size]
+                            prompt = self.data_processor.apply_chat_template(msg_batch, tokenize=False, add_generation_prompt=True)
+                            refs.append(llm.add_requests.remote(rank, sampling_params=sampling_params, vllm_vision_input=prompt))
+                    
+                    ray.get(refs)
 
-                # 最初のTrialでEnv0のログを保存
-                if t == 0 and active_envs[0]:
-                    log = {
-                        "prompt": task_prompt,
-                        "responses": full_responses[0],
-                        "verify_info": info_batch["Verify Info"][0],
-                        "reward": rewards[0],
-                    }
-                    responses.append(log)
+                    all_output_refs = []
+                    for i, llm in enumerate(llms):
+                        all_output_refs.append(llm.get_responses.remote(rank))
+                    all_outputs = sum(ray.get(all_output_refs), [])
 
-            # 最初のTrialの結果をファイル出力
-            if t == 0 and self.strategy.is_rank_0():
-                with open("/home/msuganuma_sakana_ai/src/lmm-r1/card24_results/log.json", "w") as f:
-                    json.dump(responses, f, indent=4)
-                image.save("/home/msuganuma_sakana_ai/src/lmm-r1/card24_results/image.png")
+                    model_responses_list = []
+                    for output in all_outputs:
+                        model_responses_list.append(output.outputs[0].text)
 
+                    # Create a full-sized responses list with None for inactive environments
+                    full_responses = [None] * num_envs
+                    for response, idx in zip(model_responses_list, active_indices):
+                        full_responses[idx] = response
+
+                    # preprocessing the model response to align with json style.
+                    for i, model_response in enumerate(full_responses):
+                        if model_response is None:
+                            continue
+                        if "<|im_end|>" in model_response:
+                            model_response = model_response.replace("<|im_end|>", "")
+                        try:
+                            match = re.search(json_pattern, model_response, re.DOTALL)
+                        except TypeError as e:
+                            pass
+                        if match:
+                            full_responses[i] = match.group(1)
+                        else:
+                            full_responses[i] = model_response
+                    obs_batch, rewards, terminations, truncations, info_batch = eval_env.step(full_responses)
+                    done = np.logical_or(terminations, truncations)
+
+                    # 報酬更新
+                    for idx in active_indices:
+                        episode_rewards[idx] = rewards[idx]
+
+                    # 履歴更新
+                    for idx, txt in zip(active_indices, model_responses_list):
+                        previous_responses[idx].append(txt)
+                        previous_verify_infos[idx].append(info_batch["Verify Info"][idx])
+
+                    # エピソード終了の処理
+                    for idx in active_indices:
+                        if done[idx]:
+                            active_envs[idx] = False
+                            total += 1
+                            if episode_rewards[idx] >= 5 or "Correct solution" in info_batch["Verify Info"][idx]:
+                                success += 1
+
+                    # 最初のTrialでEnv0のログを保存
+                    if t == 0 and active_envs[0]:
+                        log = {
+                            "prompt": task_prompts[0],
+                            "responses": full_responses[0],
+                            "verify_info": info_batch["Verify Info"][0],
+                            "reward": rewards[0],
+                        }
+                        responses.append(log)
+
+                # 最初のTrialの結果をファイル出力
+                if t == 0 and self.strategy.is_rank_0():
+                    with open("/home/msuganuma_sakana_ai/src/lmm-r1/card24_results/log.json", "w") as f:
+                        json.dump(responses, f, indent=4)
+                    if self.args.multimodal:
+                        image.save("/home/msuganuma_sakana_ai/src/lmm-r1/card24_results/image.png")
+
+            
+
+            # Convert to tensors and move to CUDA
+            correct_tensor = torch.tensor(success, device="cuda", dtype=torch.float)
+            total_tensor = torch.tensor(total, device="cuda", dtype=torch.float)
+            # All-reduce across all processes
+            torch.distributed.all_reduce(correct_tensor, op=torch.distributed.ReduceOp.SUM)
+            torch.distributed.all_reduce(total_tensor, op=torch.distributed.ReduceOp.SUM)
+            success_rate = correct_tensor.item() / total_tensor.item() if total_tensor.item() > 0 else 0
+            success_rates.append(success_rate)
+            success_nums.append(correct_tensor.item())
+            total_nums.append(total_tensor.item())
+            # if self.strategy.is_rank_0():
+            #     print(f"Evaluate Accuracy (avg over all ranks): {success_rate:.4f}")
+            
         
-        # success_rate = success / total if total > 0 else 0
-
-        # Convert to tensors and move to CUDA
-        correct_tensor = torch.tensor(success, device="cuda", dtype=torch.float)
-        total_tensor = torch.tensor(total, device="cuda", dtype=torch.float)
-        # All-reduce across all processes
-        torch.distributed.all_reduce(correct_tensor, op=torch.distributed.ReduceOp.SUM)
-        torch.distributed.all_reduce(total_tensor, op=torch.distributed.ReduceOp.SUM)
-        success_rate = correct_tensor.item() / total_tensor.item() if total_tensor.item() > 0 else 0
+        if self.args.multimodal:
+            results = {
+                f"In-distribution SR": success_rates[0],
+                f"OOD (rule change) SR": success_rates[1],
+                f"OOD (visual change) SR": success_rates[2]
+            }
+        else:
+            results = {
+                f"In-distribution SR": success_rates[0],
+                f"OOD (rule change) SR": success_rates[1],
+                f"OOD (number change) SR": success_rates[2]
+            }
 
         if self.strategy.is_rank_0():
-            print(f"Evaluate Accuracy (avg over all ranks): {success_rate:.4f}")
-            
-        return success_rate
+            print(f"In-distribution SR: {success_rates[0]:.4f} ({success_nums[0]}/{total_nums[0]})")
+            print(f"OOD (rule change) SR: {success_rates[1]:.4f} ({success_nums[1]}/{total_nums[1]})")
+            if self.args.multimodal:
+                print(f"OOD (visual change) SR: {success_rates[2]:.4f} ({success_nums[2]}/{total_nums[2]})")
+            else:
+                print(f"OOD (number change) SR: {success_rates[2]:.4f} ({success_nums[2]}/{total_nums[2]})")
+
+        return results
 
     
-    def formulate_oracle_arguments(self):
+    def formulate_oracle_arguments(self, eval_env_config: EvalEnvConfig):
         oracle_arguments = {}
-        oracle_arguments['face_card_msg'] = "'J', 'Q', and 'K' count as '10'." if self.eval_env_config.treat_face_cards_as_10 \
+        oracle_arguments['face_card_msg'] = "'J', 'Q', and 'K' count as '10'." if eval_env_config.treat_face_cards_as_10 \
                                         else "'J', 'Q', and 'K' count as '11', '12', and '13' respectively."
-        oracle_arguments['target_number'] = str(self.eval_env_config.target_points)
+        oracle_arguments['target_number'] = str(eval_env_config.target_points)
         oracle_arguments['example_json_text'] = example_json_text
         return oracle_arguments
     
@@ -2605,6 +2664,25 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
             messages[i] = [
                 {"role": "user",
                  "content": contents,
+                },
+            ]
+        return messages
+
+    def formulate_prompt_for_LLMStudent(self, num_envs: int, task_prompts: List[str], previous_responses: List[List[str]], previous_verify_infos: List[List[str]], history_length: int = 2) -> List[dict]:
+        messages = [[] for _ in range(num_envs)]
+
+        for i in range(num_envs):
+            contents = []
+            contents.append(task_prompts[i])
+            if len(previous_responses[i]) > 0 and len(previous_verify_infos[i]) > 0:
+                assert len(previous_responses[i]) == len(previous_verify_infos[i]), "The number of previous responses and verify infos must be the same."
+                for idx, (prev_response, prev_verify_info) in enumerate(zip(previous_responses[i][-history_length:], previous_verify_infos[i][-history_length:])):
+                    contents.append(f"\n## Previous your response ({history_length - idx} steps ago):\n{prev_response}")
+                    contents.append(f"\n## Verification message\nYou failed this trial because {prev_verify_info}")
+            
+            messages[i] = [
+                {"role": "user",
+                 "content": "\n".join(contents),
                 },
             ]
         return messages

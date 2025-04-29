@@ -197,10 +197,51 @@ class Actor(nn.Module):
 
         return sequences, attention_mask, action_mask
 
+    def process_sequences_v2(self, sequences: torch.Tensor, ouput_len, eos_token_id, pad_token_id):
+        """
+        Process generated sequences to create attention masks and action masks.
+
+        Args:
+            sequences (torch.Tensor): Generated sequence tensor
+            input_len (int): Length of the input sequence
+            eos_token_id (int): Token ID for the end-of-sequence token
+            pad_token_id (int): Token ID for the padding token
+
+        Returns:
+            tuple: A tuple containing three elements:
+                - sequences: Original sequence
+                - attention_mask: Attention mask indicating valid token positions
+                - action_mask: Action mask indicating valid action token positions
+        """
+        # Create initial attention mask by marking positions that are neither EOS nor padding tokens
+        attention_mask = (sequences.ne(eos_token_id) & sequences.ne(pad_token_id)).to(dtype=torch.long)
+        seq_length = attention_mask.size(1)
+
+        # Find the position of the last valid token in each sequence
+        eos_indices = seq_length - attention_mask.long().fliplr().argmax(dim=1, keepdim=True).clamp(min=1)
+
+        # Handle cases where EOS tokens might appear in the middle of the prompt (for Llama3 and Qwen2 models)
+        # Find the position of the first valid token in each sequence
+        first_token_indices = attention_mask.long().argmax(dim=1, keepdim=True)
+        # Create position mask
+        mask = torch.arange(seq_length).unsqueeze(0).expand(sequences.size(0), -1).to(device=sequences.device)
+        # Generate final attention mask, keeping only positions between first and last valid tokens
+        attention_mask = (mask >= first_token_indices) & (mask <= eos_indices).to(dtype=torch.long)
+
+        # In reinforcement learning, the state transition is represented as:
+        # state_i (current token) + action_i (next token) -> state_i+1 (next token)
+        # Generate state sequence from input_len-1 to second-to-last token
+        state_seq = sequences[:, -ouput_len: -1]
+        # Generate action mask indicating valid action token positions
+        action_mask = state_seq.ne(eos_token_id) & state_seq.ne(pad_token_id)
+        action_mask[:, 0] = 1
+
+        return sequences, attention_mask, action_mask
+    
     def forward(
         self,
         sequences: torch.LongTensor,
-        num_actions: Optional[Union[int, list[int]]] = None,
+        action_mask: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         return_output=False,
         ring_attn_group: Optional[dist.ProcessGroup] = None,
@@ -228,15 +269,14 @@ class Actor(nn.Module):
         # https://github.com/OpenRLHF/OpenRLHF/pull/634
         output["logits"] = output["logits"].to(torch.float32)
 
-        if num_actions is None:
+        return_action_log_probs = action_mask is not None
+        if not return_action_log_probs and return_output:
             assert return_output
             return output
 
         if not self.packing_samples:
-            log_probs = log_probs_from_logits(
-                output["logits"][:, :-1, :], sequences[:, 1:], temperature=self.temperature
-            )
-            action_log_probs = log_probs[:, -num_actions:]
+            log_probs = log_probs_from_logits(output["logits"][:, :-1, :], sequences[:, 1:], temperature=self.temperature)
+            action_log_probs = log_probs[:, -action_mask.shape[1]:]
         else:
             if ring_attn_group is not None and logps_allgather:
                 rank = dist.get_rank(ring_attn_group)
@@ -261,10 +301,9 @@ class Actor(nn.Module):
                     output["logits"][:, :-1, :], sequences[:, 1:], temperature=self.temperature
                 )
 
-            assert isinstance(num_actions, list) and len(num_actions) == len(packed_seq_lens)
             action_log_probs = []
             offset = 0
-            for num_action, seq_len in zip(num_actions, packed_seq_lens):
+            for num_action, seq_len in zip(action_mask.shape[1], packed_seq_lens):
                 start, end = max(0, offset + seq_len - num_action - 1), offset + seq_len - 1
                 action_log_probs.append(log_probs[:, start:end])
                 offset += seq_len

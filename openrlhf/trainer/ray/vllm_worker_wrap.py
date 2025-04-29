@@ -49,9 +49,8 @@ class WorkerWrap(Worker):
                 layer_idx = int(layer_match.group(1))
                 if layer_idx == 0 or layer_idx % 10 == 0 or layer_idx == 35:  # 最初、10ごと、最後のレイヤー
                     print(f"update weight: {name}, dtype: {dtype}, shape: {shape}")
-        # else:
-        #     # 非トランスフォーマーレイヤーは常に表示
-        #     print(f"update weight: {name}, dtype: {dtype}, shape: {shape}")
+        elif torch.distributed.get_rank() == 0:
+            print(f"update weight: {name}, dtype: {dtype}, shape: {shape}")
         
         
         assert dtype == self.model_config.dtype, f"mismatch dtype: src {dtype}, dst {self.model_config.dtype}"
