@@ -59,11 +59,27 @@ Feedback:
 """
 
 ## Prompt for feedback models on card game
-FEEDBACK_PROMPT_CARD = """Your task is to provide helpful hints or directions for another model so that the model can achieve the goal better. 
-You should refer to the `Previous Model's Answer`, `Verification message`, and `Answer examples` below.
+FEEDBACK_PROMPT_CARD = """Another model is working on a task now. Your task is to provide a helpful hints or directions for the model so that the model can solve the task. 
+You should refer to the `Previous Model's Answer`, `Verification message`, and `Answer examples` below and provide some hints or directions that can improve the model's thought and answer.
+Note that DO NOT PROVIDE or INCLUDE THE ANSWER OF THE TASK in your feedback (i.e., do not provide any answers of the 'formula' in your feedback) even though you know the answer.
+Your goal is to help the model to improve its thought process.
 
-== The task that another model is working on ==
 {task}
+"""
+
+## Prompt for feedback models on card game
+FEEDBACK_PROMPT_CARD_V2 = """Another model is working on a task now. Your task is to provide a helpful hints or directions for the model so that the model can solve the task. 
+You should refer to the `Previous Model's Answer`, `Verification message`, and `Formula examples` below and provide some hints or directions that can improve the model's thought and answer.
+Note that DO NOT PROVIDE or INCLUDE THE ANSWER OF THE TASK in your feedback (i.e., do not provide any answers of the 'formula' in your feedback) even though you know the answer.
+Your goal is to help the model to improve its thought process.
+
+## Task Description of the model is working on
+The task of the model is to find a formula that evaluates to 24 using four numbers from the cards and operators such as '+', '-', '*', '/', '(', ')', and '='.
+Note that 'J', 'Q', and 'K' count as '10'. Also, each card of the four cards must be used exactly once.
+"""
+
+TASK_DESCRIPTION_FOR_FEEDBACKMODEL = """The task of the model is to find a formula that evaluates to 24 using four numbers from the cards and operators such as '+', '-', '*', '/', '(', ')', and '='.
+Note that 'J', 'Q', and 'K' count as '10'. Also, each card of the four cards must be used exactly once.
 """
 
 FEEDBACK_PROMPT_SUFFIX = """
@@ -116,6 +132,13 @@ Please reason step by step, and put your final answer within \\boxed{{}}.
 FEEDBACK_PROMPT_BASE_CARD = """Your task is to solve the following problem. Unfortunately, your previous answers are incorrect or can be improved. 
 Please provide a new answer by carefully considering ## Feedback and your previous answers below.
 Please DO NOT include any explicit references to the feedback in your response (e.g., “Considering the feedback ...”, “The feedback says ...”).
+
+{task}
+"""
+
+## Prompt for base model to generate responses for REINFORCE
+PROMPT_BASE_CARD_REINFORCE = """Your task is to solve the following problem. Unfortunately, your previous answers are incorrect or can be improved. 
+Please generate a new answer by considering your previous answers below.
 
 {task}
 """

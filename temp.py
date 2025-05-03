@@ -6,6 +6,186 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 import json
 
 
+from vllm import LLM, SamplingParams
+from PIL import Image
+import os
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoProcessor
+import json
+import warnings
+import torch
+
+model_name = "Qwen/Qwen3-8B"
+
+# Suppress specific warnings if needed (optional)
+warnings.filterwarnings("ignore", category=UserWarning, message=".*Could not find image processor.*")
+
+# --- Your Initial Code ---
+model_name = "Qwen/Qwen2-7B-Instruct" # Using a smaller, common instruct model for demonstration
+# It's usually sufficient to use the tokenizer for text processing with chat templates
+# AutoProcessor is more for multimodal models, but often includes the tokenizer.
+# Using AutoTokenizer directly is often clearer for text-only tasks.
+try:
+    # Prefer AutoTokenizer for text tasks unless processor is specifically needed
+    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+    # Using AutoModelForCausalLM is correct
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype="auto",
+        device_map="auto",
+        trust_remote_code=True
+    )
+    # Set pad_token if it's not set (common for some models like Qwen)
+    if tokenizer.pad_token is None:
+        print("Warning: pad_token not set. Using eos_token as pad_token.")
+        tokenizer.pad_token = tokenizer.eos_token
+        model.config.pad_token_id = model.config.eos_token_id
+
+except Exception as e:
+    print(f"Error loading model/tokenizer '{model_name}': {e}")
+    print("Please ensure the model name is correct and you have access.")
+    exit()
+
+
+prompts = [
+    "\"thoughts\": \"I think this is the logic...\"\n\n\"formula\": \"46=24+22\"", # Corrected formula example
+    "\"thoughts\": \"Maybe multiply first...\"\n\n\"formula\": \"43*2=86\"",     # Corrected formula example
+]
+
+messages = [
+    [
+        {"role": "system", "content": "You are a helpful assistant."}, # Often good practice to include a system prompt
+        {"role": "user", "content": prompt},
+    ]
+    for prompt in prompts
+]
+
+# --- Process Prompts and Get Token IDs ---
+# Use return_tensors='pt' to get PyTorch tensors
+# Use padding=True to handle sequences of different lengths
+# Keep track of the attention_mask as well, which padding=True provides
+tokenized_output = tokenizer.apply_chat_template(
+    messages,
+    tokenize=True,
+    # enable_thinking=False, # This parameter might not be standard. Check Qwen specific docs if needed.
+    add_generation_prompt=True, # Adds prompt indicating model should start generating
+    return_tensors='pt',
+    padding=True # Pad sequences to the longest in the batch
+).to(model.device) # Ensure tensors are on the same device as the model
+
+input_ids = tokenized_output # This is usually the key for input IDs
+
+# --- Tokenize the Markers ---
+# Important: Tokenize them exactly as they appear in the prompt string.
+# add_special_tokens=False prevents adding BOS/EOS tokens around just these markers.
+thoughts_marker = "\"thoughts\":"
+formula_marker = "\"formula\":"
+
+# Use encode to get token IDs. We need the list of IDs.
+thoughts_marker_ids = tokenizer.encode(thoughts_marker, add_special_tokens=False)
+formula_marker_ids = tokenizer.encode(formula_marker, add_special_tokens=False)
+
+print(f"Token IDs for '{thoughts_marker}': {thoughts_marker_ids}")
+print(f"Token IDs for '{formula_marker}': {formula_marker_ids}")
+
+# --- Create the Mask ---
+batch_size, seq_length = input_ids.shape
+# Initialize mask tensor with 1s, matching shape and device of input_ids
+# Use float type for the mask values (0.2 and 1.0)
+target_masks = torch.ones_like(input_ids, dtype=torch.float, device=input_ids.device)
+
+# Helper function to find subsequence indices
+def find_subsequence_indices(sequence_list, subsequence_list):
+    """Finds the start index of the first occurrence of subsequence_list in sequence_list."""
+    len_sub = len(subsequence_list)
+    if len_sub == 0:
+        return 0 # Empty subsequence found at start
+    for i in range(len(sequence_list) - len_sub + 1):
+        if sequence_list[i:i+len_sub] == subsequence_list:
+            return i
+    return -1 # Not found
+
+# Iterate through each item in the batch
+for i in range(batch_size):
+    current_ids_list = input_ids[i].tolist() # Convert tensor row to list for easier searching
+
+    # Find the start index of the marker sequences
+    thoughts_start_idx = find_subsequence_indices(current_ids_list, thoughts_marker_ids)
+    formula_start_idx = find_subsequence_indices(current_ids_list, formula_marker_ids)
+
+    # Check if both markers were found and in the correct order
+    if thoughts_start_idx != -1 and formula_start_idx != -1 and thoughts_start_idx < formula_start_idx:
+        # Calculate the end index of the thoughts marker sequence
+        thoughts_end_idx = thoughts_start_idx + len(thoughts_marker_ids)
+
+        # Apply the 0.2 mask value *between* the end of "thoughts:" and the start of "formula:"
+        # Slice format is [start:end], where end is exclusive
+        target_masks[i, thoughts_end_idx:formula_start_idx] = 0.2
+        print(f"Batch {i}: Found markers. Applying mask between index {thoughts_end_idx} and {formula_start_idx}.")
+    else:
+        # Handle cases where markers aren't found or are in the wrong order (optional)
+        print(f"Batch {i}: Markers not found or not in expected order. Mask remains all 1s.")
+        # You might want to raise an error or handle this differently depending on requirements.
+
+# --- Display Results ---
+print("\nInput Prompts:")
+for p in prompts:
+    print(p)
+
+print("\nTokenized Input IDs (Batch):")
+print(input_ids)
+# print("\nAttention Mask (from padding):") # Provided by apply_chat_template with padding=True
+# print(attention_mask) # You might need this attention_mask for model inference later
+
+print("\nGenerated Target Masks (Batch):")
+print(target_masks)
+
+# Example of how you might use this mask (e.g., in a custom loss function)
+# Assuming you have 'labels' corresponding to input_ids for training
+# loss_fct = torch.nn.CrossEntropyLoss(reduction='none') # Calculate loss per token
+# logits = model(input_ids=input_ids, attention_mask=attention_mask).logits
+# Shift logits and labels for next token prediction
+# shift_logits = logits[..., :-1, :].contiguous()
+# shift_labels = labels[..., 1:].contiguous()
+# shift_masks = target_masks[..., 1:].contiguous() # Shift mask accordingly
+#
+# loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+# loss = loss.view(batch_size, seq_length - 1)
+# weighted_loss = (loss * shift_masks).sum() / shift_masks.sum() # Apply mask and calculate mean
+# print(f"\nExample Weighted Loss (conceptual): {weighted_loss.item()}")
+import pdb; pdb.set_trace()
+
+
+
+
+llm = LLM(model_name, enable_prefix_caching=True)
+sampling_params = SamplingParams(temperature=0.7, top_p=0.8, top_k=20, min_p=0.0, max_tokens=512, skip_special_tokens=True)
+
+prompts = [
+    "What is the life of a human? Please answer in English and within 256 words.",
+    "Where is the capital of Japan? Please answer in English.",
+]
+
+messages = [
+    [
+        {"role": "user", "content": prompt},
+    ]
+    for prompt in prompts
+]
+
+chat_prompts = processor.apply_chat_template(messages, tokenize=False, enable_thinking=False, add_generation_prompt=True)
+
+import pdb; pdb.set_trace()
+
+outputs = llm.generate(chat_prompts, sampling_params)
+print(outputs[0].outputs[0].text)
+print("--------------------------------")
+print(outputs[1].outputs[0].text)
+import pdb; pdb.set_trace()
+
+
+
+
+
 with open("data.json", "r") as f:
     data = json.load(f)
 

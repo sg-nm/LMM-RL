@@ -113,34 +113,6 @@ def train(args):
             args.vllm_enable_sleep,
         )
     
-    # Feed-back model
-    bundles = [{"GPU": 1, "CPU": 1} for _ in range(args.feedback_vllm_num_engines * args.feedback_vllm_tensor_parallel_size)]
-    pg_feedback = placement_group(bundles, strategy="PACK")
-    ray.get([pg_feedback.ready()])
-    feedback_vllm_engines = None
-    if args.feedback_vllm_num_engines is not None and args.feedback_vllm_num_engines > 0:
-        max_len = args.max_len if args.max_len else args.prompt_max_len + args.generate_max_len
-        # if args.colocate_all_models:
-        #     assert (args.actor_num_nodes * args.actor_num_gpus_per_node == args.feedback_vllm_num_engines * args.feedback_vllm_tensor_parallel_size), (
-        #         f"actor_num_nodes * actor_num_gpus_per_node must be equal to "
-        #         f"feedback_vllm_num_engines * feedback_vllm_tensor_parallel_size, got {args.actor_num_nodes * args.actor_num_gpus_per_node} "
-        #         f"and {args.feedback_vllm_num_engines * args.feedback_vllm_tensor_parallel_size}"
-        #     )
-
-        feedback_vllm_engines = create_vllm_engines(
-            args.feedback_vllm_num_engines,
-            args.feedback_vllm_tensor_parallel_size,
-            args.feedback_model,
-            args.seed,
-            args.enable_prefix_caching,
-            args.enforce_eager,
-            max_len,
-            args.actor_num_nodes * args.actor_num_gpus_per_node // args.ring_attn_size,
-            pg_feedback,
-            args.vllm_gpu_memory_utilization,
-            args.vllm_enable_sleep,
-        )
-
     # Actor model (Policy model)
     actor_model = PPORayActorGroup(
         args.actor_num_nodes,
@@ -149,9 +121,6 @@ def train(args):
         pg=pg,
         num_gpus_per_actor=0.2 if pg else 1,
     )
-
-    # Feedback model
-    feedback_model = feedback_vllm_engines
 
     if args.init_kl_coef == 0:
         ref_model = None
@@ -230,7 +199,7 @@ def train(args):
     
     # train actor and critic model
     refs = actor_model.async_fit_actor_model_feedback(
-        critic_model, ref_model, reward_models, args.remote_rm_url, reward_fn=reward_fn, vllm_engines=vllm_engines, feedback_model=feedback_model
+        critic_model, ref_model, reward_models, args.remote_rm_url, reward_fn=reward_fn, vllm_engines=vllm_engines
     )
     ray.get(refs)
 
@@ -484,7 +453,7 @@ if __name__ == "__main__":
     parser.add_argument("--colocate_actor_vllm", action="store_true", default=False)
     parser.add_argument("--distillation", action="store_true", default=False)
     parser.add_argument("--distillation_coef", type=float, default=1.0, help="Distillation coef")
-    parser.add_argument("--use_reward_diff", action="store_true", default=False)
+    parser.add_argument("--no_verification", action="store_true", default=False)
 
 
     args = parser.parse_args()
@@ -549,7 +518,5 @@ if __name__ == "__main__":
 
     if not args.multimodal:
         args.dataset_name = "card_24_L"
-    if "Qwen3" in args.pretrain and not args.multimodal:
-        args.dataset_name = "_card24_L_Qwen3"
     
     train(args)

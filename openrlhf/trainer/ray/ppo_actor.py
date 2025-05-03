@@ -40,7 +40,7 @@ from peft.peft_model import PeftModel
 from .launcher import BasePPORole
 from .utils import get_physical_gpu_id
 
-from openrlhf.trainer.ppo_utils.experience_maker_card_game import RemoteExperienceMaker_CardGame
+from openrlhf.trainer.ppo_utils.experience_maker_card_game import RemoteExperienceMaker_CardGame, RemoteExperienceMaker_CardGame_REINFORCE
 # from gui_env.robust_parallel_desktop_env import ParallelDesktopEnv
 from openrlhf.textgrad.custom_reward_functions import check_answer_commonsense_qa, check_answer_math
 from openrlhf.trainer.ppo_utils.replay_buffer import ReplayBuffer_CARDGAME
@@ -1558,10 +1558,14 @@ class ActorModelRayActor_Card(BasePPORole):
             self.data_processor = AutoProcessor.from_pretrained(pretrain, padding_side="left", min_pixels=min_pixels, max_pixels=max_pixels)
             if args.feedback_model:
                 self.feedback_data_processor = AutoProcessor.from_pretrained(args.feedback_model, padding_side="left")
+            else:
+                self.feedback_data_processor = None
         else:
             self.data_processor = AutoProcessor.from_pretrained(pretrain, padding_side="left")
             if args.feedback_model:
                 self.feedback_data_processor = AutoProcessor.from_pretrained(args.feedback_model, padding_side="left")
+            else:
+                self.feedback_data_processor = None
         self.tokenizer = get_tokenizer(pretrain, actor.model, "left", strategy, use_fast=not strategy.args.disable_fast_tokenizer)
 
         if args.enable_ema:
@@ -1880,28 +1884,49 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
             multimodal=self.strategy.args.multimodal,
         )
 
-        self.experience_maker = RemoteExperienceMaker_CardGame(
-            actor=self.actor,
-            critic=self.critic,
-            reward_model=self.reward_model,
-            initial_model=self.initial_model,
-            tokenizer=self.tokenizer,
-            data_processor=self.data_processor,
-            feedback_data_processor=self.feedback_data_processor,
-            prompt_max_len=self.prompt_max_len,
-            kl_controller=self.kl_ctl,
-            strategy=self.strategy,
-            remote_rm_url=self.remote_rm_url,
-            reward_fn=self.reward_fn,
-            vllm_engines=self.vllm_engines,
-            feedback_model=self.feedback_model,
-            packing_samples=self.strategy.args.packing_samples,
-            multimodal=self.strategy.args.multimodal,
-            feedback_rewards=self.strategy.args.feedback_rewards,
-            envs=self.envs,
-            env_config=self.env_config,
-            prompt_config=self.prompt_config,
-        )
+        if self.strategy.args.advantage_estimator == "reinforce":
+                self.experience_maker = RemoteExperienceMaker_CardGame_REINFORCE(
+                actor=self.actor,
+                critic=self.critic,
+                reward_model=self.reward_model,
+                initial_model=self.initial_model,
+                tokenizer=self.tokenizer,
+                data_processor=self.data_processor,
+                prompt_max_len=self.prompt_max_len,
+                kl_controller=self.kl_ctl,
+                strategy=self.strategy,
+                remote_rm_url=self.remote_rm_url,
+                reward_fn=self.reward_fn,
+                vllm_engines=self.vllm_engines,
+                packing_samples=self.strategy.args.packing_samples,
+                multimodal=self.strategy.args.multimodal,
+                envs=self.envs,
+                env_config=self.env_config,
+                prompt_config=self.prompt_config,
+            )
+        else:
+            self.experience_maker = RemoteExperienceMaker_CardGame(
+                actor=self.actor,
+                critic=self.critic,
+                reward_model=self.reward_model,
+                initial_model=self.initial_model,
+                tokenizer=self.tokenizer,
+                data_processor=self.data_processor,
+                feedback_data_processor=self.feedback_data_processor,
+                prompt_max_len=self.prompt_max_len,
+                kl_controller=self.kl_ctl,
+                strategy=self.strategy,
+                remote_rm_url=self.remote_rm_url,
+                reward_fn=self.reward_fn,
+                vllm_engines=self.vllm_engines,
+                feedback_model=self.feedback_model,
+                packing_samples=self.strategy.args.packing_samples,
+                multimodal=self.strategy.args.multimodal,
+                feedback_rewards=self.strategy.args.feedback_rewards,
+                envs=self.envs,
+                env_config=self.env_config,
+                prompt_config=self.prompt_config,
+            )
 
         backend = getattr(self.strategy.args, "vllm_sync_backend", "nccl")
         self.use_cuda_ipc = False
@@ -2430,10 +2455,20 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
         else:
             llms = self.vllm_engines[rank::world_size]
 
+        ## original
+        # sampling_params = SamplingParams(
+        #     temperature=0,
+        #     top_p=1.0,
+        #     top_k=-1,
+        #     max_tokens=512,
+        #     min_tokens=1,
+        #     skip_special_tokens=False,
+        #     include_stop_str_in_output=False,
+        # )
         sampling_params = SamplingParams(
-            temperature=0,
-            top_p=1.0,
-            top_k=-1,
+            temperature=0.7,
+            top_p=0.8,
+            top_k=20,
             max_tokens=512,
             min_tokens=1,
             skip_special_tokens=False,
@@ -2444,13 +2479,13 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
         success_nums = []
         total_nums = []
 
-        for eval_env, eval_env_config in zip(self.eval_envs, self.eval_env_configs):
+        for eval_id, (eval_env, eval_env_config) in enumerate(zip(self.eval_envs, self.eval_env_configs)):
 
             success  = 0
             total = 0
             num_envs = eval_env.num_envs
             history_length = 2
-            responses = []
+            responses = [[] for _ in range(num_envs)]
             oracle_arguments = self.formulate_oracle_arguments(eval_env_config)
             json_pattern = r"```json\n(.*?)\n```"
 
@@ -2522,7 +2557,10 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
                     else:
                         for i, llm in enumerate(llms):
                             msg_batch = messages[i * batch_size : (i + 1) * batch_size]
-                            prompt = self.data_processor.apply_chat_template(msg_batch, tokenize=False, add_generation_prompt=True)
+                            if "Qwen3" in self.strategy.args.pretrain:
+                                prompt = self.data_processor.apply_chat_template(msg_batch, tokenize=False, enable_thinking=False, add_generation_prompt=True)
+                            else:
+                                prompt = self.data_processor.apply_chat_template(msg_batch, tokenize=False, add_generation_prompt=True)
                             refs.append(llm.add_requests.remote(rank, sampling_params=sampling_params, vllm_vision_input=prompt))
                     
                     ray.get(refs)
@@ -2575,24 +2613,38 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
                             if episode_rewards[idx] >= 5 or "Correct solution" in info_batch["Verify Info"][idx]:
                                 success += 1
 
-                    # 最初のTrialでEnv0のログを保存
-                    if t == 0 and active_envs[0]:
+                    # log
+                    for j in range(len(active_indices)):
+                        env_id = active_indices[j]
                         log = {
-                            "prompt": task_prompts[0],
-                            "responses": full_responses[0],
-                            "verify_info": info_batch["Verify Info"][0],
-                            "reward": rewards[0],
+                            "env_idx": str(env_id),
+                            "prompt": task_prompts[j],
+                            "responses": full_responses[env_id],
+                            "verify_info": info_batch["Verify Info"][j],
+                            "reward": rewards[j],
                         }
-                        responses.append(log)
+                        responses[env_id].append(log)
+                    # # 最初のTrialでEnv0のログを保存
+                    # if t == 0 and active_envs[0]:
+                    #     log = {
+                    #         "prompt": task_prompts[0],
+                    #         "responses": full_responses[0],
+                    #         "verify_info": info_batch["Verify Info"][0],
+                    #         "reward": rewards[0],
+                    #     }
+                    #     responses.append(log)
 
-                # 最初のTrialの結果をファイル出力
-                if t == 0 and self.strategy.is_rank_0():
-                    with open("/home/msuganuma_sakana_ai/src/lmm-r1/card24_results/log.json", "w") as f:
-                        json.dump(responses, f, indent=4)
-                    if self.args.multimodal:
-                        image.save("/home/msuganuma_sakana_ai/src/lmm-r1/card24_results/image.png")
+            # 最初のTrialの結果をファイル出力
+            if self.strategy.is_rank_0():
+                if not os.path.exists(self.strategy.args.output_log_dir + f"/eval_results_{eval_id}"):
+                    os.makedirs(self.strategy.args.output_log_dir + f"/eval_results_{eval_id}")
+                for env_id in range(num_envs):
+                    if env_id < 20:
+                        with open(self.strategy.args.output_log_dir + f"/eval_results_{eval_id}/log_{env_id}.json", "w") as f:
+                            json.dump(responses[env_id], f, indent=4)
+                if self.args.multimodal:
+                    image.save(self.strategy.args.output_log_dir + f"/eval_results_{eval_id}/image.png")
 
-            
 
             # Convert to tensors and move to CUDA
             correct_tensor = torch.tensor(success, device="cuda", dtype=torch.float)

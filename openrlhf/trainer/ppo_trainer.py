@@ -1,7 +1,7 @@
 import os
 import os.path
 from abc import ABC
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -19,7 +19,7 @@ from openrlhf.models.utils import compute_approx_kl, masked_mean, unpacking_samp
 from openrlhf.utils.distributed_sampler import DistributedSampler
 
 from .ppo_utils import AdaptiveKLController, Experience, FixedKLController, NaiveExperienceMaker, NaiveReplayBuffer
-
+from .ppo_utils.experience_maker_card_game import Experience_CARDGAME
 
 class PPOTrainer(ABC):
     """
@@ -268,8 +268,8 @@ class PPOTrainer(ABC):
                         self.strategy.print(output)
                     self.replay_buffer.append(experience)
 
-                if self.args.advantage_estimator != "group_norm" and self.args.advantage_estimator != "uniform":
-                    self.replay_buffer.normalize("advantages", self.strategy)
+                # if self.args.advantage_estimator != "group_norm" and self.args.advantage_estimator != "uniform":
+                #     self.replay_buffer.normalize("advantages", self.strategy)
                 status = self.ppo_train(steps)
                 self.replay_buffer.clear()
 
@@ -419,7 +419,7 @@ class PPOTrainer(ABC):
             status.update(self.training_step_critic(experience))
         return status
 
-    def training_step_actor(self, experience: Experience) -> Dict[str, float]:
+    def training_step_actor(self, experience: Union[Experience, Experience_CARDGAME]) -> Dict[str, float]:
         
         self.actor.train()
 
@@ -451,6 +451,7 @@ class PPOTrainer(ABC):
             packed_seq_lens = None
             attention_mask = experience.attention_mask
             visual_inputs = experience.visual_inputs
+            reward_diff = experience.reward_diff
             if self.args.use_kl_loss and experience.base_action_log_probs is not None:
                 base_action_log_probs = experience.base_action_log_probs
 
@@ -493,7 +494,7 @@ class PPOTrainer(ABC):
         actor_loss = self.actor_loss_fn(
             action_log_probs,
             old_action_log_probs,
-            advantages,
+            advantages if not self.args.use_reward_diff else reward_diff,
             action_mask=experience.action_mask,
         )
 

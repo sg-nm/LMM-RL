@@ -9,9 +9,14 @@ import json
 example = {
   "cards": ['4', '3', '2', 'K'],
   "number": [4, 3, 2, 10],
-  "thought": "<step by step reasoning process to build the formula>",
+  "thoughts": "step by step reasoning process to build the formula",
   "formula": "4*3+2+10=24",
 }
+# example = {
+#   "cards": ['4', '3', '2', 'K'],
+#   "number": [4, 3, 2, 10],
+#   "formula": "4*3+2+10=24",
+# }
 example_json_text = json.dumps(example, ensure_ascii=False)
 
 Q_GeneralPoint_EQN_VL = """
@@ -39,7 +44,7 @@ Q_GeneralPoint_EQN_L = """
 ## Task Description
 You are an expert {target_number} points card game player. You will receive a set of 4 cards.
 Your goal is to find a formula that evaluates to {target_number} using numbers from the cards and operators such as '+', '-', '*', '/', '(', ')', and '='.
-Note that {face_card_msg}, and each card must be used exactly once.
+Note that {face_card_msg} Also, each card must be used exactly once.
 
 ## Input
 Cards: {cards}
@@ -48,14 +53,14 @@ Cards: {cards}
 {{
   "cards": [x, y, z, w], where {face_card_msg},
   "number": [a, b, c, d], where a, b, c, and d are the numbers on the cards,
-  "thought": "your step by step reasoning process to build the formula",
-  "formula": 'an equation that equals {target_number}',
+  "thoughts": "your step by step thought process to build the formula where how you think and build the formula",
+  "formula": 'a formula that equals {target_number}',
 }}
 
 ## Output Example
 {example_json_text}
 
-Please only output the json.
+Please output your response in the json format above.
 """
 
 """
