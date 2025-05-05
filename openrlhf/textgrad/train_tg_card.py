@@ -485,6 +485,8 @@ if __name__ == "__main__":
     parser.add_argument("--distillation", action="store_true", default=False)
     parser.add_argument("--distillation_coef", type=float, default=1.0, help="Distillation coef")
     parser.add_argument("--use_reward_diff", action="store_true", default=False)
+    parser.add_argument("--reasoning_logprob_weight", type=float, default=1.0, help="weight for reasoning logprob")
+    parser.add_argument("--actor_loss_coef", type=float, default=1.0, help="weight for actor loss")
 
 
     args = parser.parse_args()

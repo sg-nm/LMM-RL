@@ -20,7 +20,7 @@ model_name = "Qwen/Qwen3-8B"
 warnings.filterwarnings("ignore", category=UserWarning, message=".*Could not find image processor.*")
 
 # --- Your Initial Code ---
-model_name = "Qwen/Qwen2-7B-Instruct" # Using a smaller, common instruct model for demonstration
+model_name = "Qwen/Qwen2.5-7B-Instruct" # Using a smaller, common instruct model for demonstration
 # It's usually sufficient to use the tokenizer for text processing with chat templates
 # AutoProcessor is more for multimodal models, but often includes the tokenizer.
 # Using AutoTokenizer directly is often clearer for text-only tasks.
@@ -47,8 +47,8 @@ except Exception as e:
 
 
 prompts = [
-    "\"thoughts\": \"I think this is the logic...\"\n\n\"formula\": \"46=24+22\"", # Corrected formula example
-    "\"thoughts\": \"Maybe multiply first...\"\n\n\"formula\": \"43*2=86\"",     # Corrected formula example
+    "{\n  \"cards\": [\"9\", \"8\", \"3\", \"8\"],\n  \"number\": [9, 8, 3, 8],\n  \"thoughts\": \"To solve this, I will try different combinations of the four numbers 9, 8, 3, and 8 using the allowed operators. One potential solution is to multiply 8 by 3, then subtract the difference between 9 and 8. This can be represented as (8 * 3) - (9 - 8).\",\n  \"formula\": \"(8 * 3) - (9 - 8) = 24\"\n}",
+    "{\n  \"cards\": [\"4\", \"3\", \"2\", \"K\"],\n  \"number\": [4, 3, 2, 10],\n  \"thoughts\": \"step by step reasoning process to build the formula\",\n  \"formula\": \"4*3+2+10=24\"\n}",     # Corrected formula example
 ]
 
 messages = [
@@ -77,12 +77,14 @@ input_ids = tokenized_output # This is usually the key for input IDs
 # --- Tokenize the Markers ---
 # Important: Tokenize them exactly as they appear in the prompt string.
 # add_special_tokens=False prevents adding BOS/EOS tokens around just these markers.
-thoughts_marker = "\"thoughts\":"
-formula_marker = "\"formula\":"
+thoughts_marker = "thoughts\":"
+formula_marker = "formula\":"
 
 # Use encode to get token IDs. We need the list of IDs.
 thoughts_marker_ids = tokenizer.encode(thoughts_marker, add_special_tokens=False)
 formula_marker_ids = tokenizer.encode(formula_marker, add_special_tokens=False)
+
+import pdb; pdb.set_trace()
 
 print(f"Token IDs for '{thoughts_marker}': {thoughts_marker_ids}")
 print(f"Token IDs for '{formula_marker}': {formula_marker_ids}")

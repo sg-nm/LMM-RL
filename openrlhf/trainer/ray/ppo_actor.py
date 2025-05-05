@@ -1699,6 +1699,10 @@ class ActorModelRayActor_Card(BasePPORole):
                 import traceback
                 traceback.print_exc()
 
+        else:
+            self.eval_envs = None
+            self.eval_env_configs = None
+
 
     def max_steps(self):
         """Return the maximum number of steps."""
@@ -2565,6 +2569,11 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
                     
                     ray.get(refs)
 
+                    if self.strategy.ring_attn_group is None:
+                        torch.distributed.barrier()
+                    else:
+                        time.sleep(2)
+
                     all_output_refs = []
                     for i, llm in enumerate(llms):
                         all_output_refs.append(llm.get_responses.remote(rank))
@@ -2575,13 +2584,13 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
                         model_responses_list.append(output.outputs[0].text)
 
                     # Create a full-sized responses list with None for inactive environments
-                    full_responses = [None] * num_envs
+                    full_responses = ["None"] * num_envs
                     for response, idx in zip(model_responses_list, active_indices):
                         full_responses[idx] = response
 
                     # preprocessing the model response to align with json style.
                     for i, model_response in enumerate(full_responses):
-                        if model_response is None:
+                        if model_response is None or model_response == "None":
                             continue
                         if "<|im_end|>" in model_response:
                             model_response = model_response.replace("<|im_end|>", "")
@@ -2620,8 +2629,8 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
                             "env_idx": str(env_id),
                             "prompt": task_prompts[j],
                             "responses": full_responses[env_id],
-                            "verify_info": info_batch["Verify Info"][j],
-                            "reward": rewards[j],
+                            "verify_info": info_batch["Verify Info"][env_id],
+                            "reward": rewards[env_id],
                         }
                         responses[env_id].append(log)
                     # # 最初のTrialでEnv0のログを保存

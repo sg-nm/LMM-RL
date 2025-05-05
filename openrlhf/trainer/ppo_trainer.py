@@ -15,7 +15,7 @@ import ray
 
 from openrlhf.models import Actor, GPTLMLoss, PolicyLoss, ValueLoss
 from openrlhf.models.ring_attn_utils import pad_sequences, unpad_sequences
-from openrlhf.models.utils import compute_approx_kl, masked_mean, unpacking_samples
+from openrlhf.models.utils import compute_approx_kl, masked_mean, unpacking_samples, create_weighted_masks
 from openrlhf.utils.distributed_sampler import DistributedSampler
 
 from .ppo_utils import AdaptiveKLController, Experience, FixedKLController, NaiveExperienceMaker, NaiveReplayBuffer
@@ -491,12 +491,22 @@ class PPOTrainer(ABC):
             )
 
         # loss function
-        actor_loss = self.actor_loss_fn(
-            action_log_probs,
-            old_action_log_probs,
-            advantages if not self.args.use_reward_diff else reward_diff,
-            action_mask=experience.action_mask,
-        )
+        if self.args.reasoning_logprob_weight != 1.0:
+            # create weight masks for reasoning parts
+            weighted_action_mask = create_weighted_masks(sequences, experience.action_mask, self.args.reasoning_logprob_weight, self.tokenizer)
+            actor_loss = self.actor_loss_fn(
+                action_log_probs,
+                old_action_log_probs,
+                advantages if not self.args.use_reward_diff else reward_diff,
+                action_mask=weighted_action_mask,
+            )
+        else:
+            actor_loss = self.actor_loss_fn(
+                action_log_probs,
+                old_action_log_probs,
+                advantages if not self.args.use_reward_diff else reward_diff,
+                action_mask=experience.action_mask,
+            )
 
         if self.args.use_kl_loss:
             if self.initial_model is not None:
@@ -553,7 +563,7 @@ class PPOTrainer(ABC):
             kl2better_loss = 0
 
         
-        loss = actor_loss + aux_loss * self.args.aux_loss_coef + kl_loss * self.kl_ctl.value + kl2better_loss * self.args.distillation_coef
+        loss = actor_loss * self.args.actor_loss_coef + aux_loss * self.args.aux_loss_coef + kl_loss * self.kl_ctl.value + kl2better_loss * self.args.distillation_coef
         self.strategy.backward(loss, self.actor, self.actor_optim)
 
         # ptx loss

@@ -201,3 +201,58 @@ def unpacking_samples(values: torch.Tensor, packed_seqlens: list[int]):
         unpacked_values.append(values[offset : offset + seqlen])
         offset += seqlen
     return unpacked_values
+
+
+def create_weighted_masks(sequence_ids: torch.Tensor, action_mask: torch.Tensor, reasoning_logprob_weight: float, tokenizer) -> torch.Tensor:
+    
+    batch_size, output_length = action_mask.shape
+    output_ids = sequence_ids[:, -output_length-1:-1]
+    
+    thoughts_marker = "thoughts\":"
+    formula_marker = "formula\":"
+
+    thoughts_marker_ids = tokenizer.encode(thoughts_marker, add_special_tokens=False)
+    formula_marker_ids = tokenizer.encode(formula_marker, add_special_tokens=False)
+
+    # print(f"batch_size: {batch_size}")
+    # print(f"output_length: {output_length}")
+    # print(f"thoughts_marker_ids: {thoughts_marker_ids}")
+    # print(f"formula_marker_ids: {formula_marker_ids}")
+
+    # Iterate through each item in the batch
+    for i in range(batch_size):
+        current_ids_list = output_ids[i].tolist() # Convert tensor row to list for easier searching
+
+        # print(f"current_ids_list: {current_ids_list}")
+
+        # Find the start index of the marker sequences
+        thoughts_start_idx = find_subsequence_indices(current_ids_list, thoughts_marker_ids)
+        formula_start_idx = find_subsequence_indices(current_ids_list, formula_marker_ids)
+
+        # print(f"thoughts_start_idx: {thoughts_start_idx}")
+        # print(f"formula_start_idx: {formula_start_idx}")
+        # import pdb; pdb.set_trace()
+        
+        # Check if both markers were found and in the correct order
+        if thoughts_start_idx != -1 and formula_start_idx != -1 and thoughts_start_idx < formula_start_idx:
+            # Calculate the end index of the thoughts marker sequence
+            thoughts_end_idx = thoughts_start_idx + len(thoughts_marker_ids)
+            # Slice format is [start:end], where end is exclusive
+            # if action_mask[i, thoughts_end_idx:formula_start_idx] == 1:
+            action_mask[i, thoughts_end_idx:formula_start_idx] = reasoning_logprob_weight
+        # else:
+        #     print(f"Batch {i}: Markers not found or not in expected order.")
+
+    return action_mask
+
+
+# Helper function to find subsequence indices
+def find_subsequence_indices(sequence_list, subsequence_list):
+    """Finds the start index of the first occurrence of subsequence_list in sequence_list."""
+    len_sub = len(subsequence_list)
+    if len_sub == 0:
+        return 0 # Empty subsequence found at start
+    for i in range(len(sequence_list) - len_sub + 1):
+        if sequence_list[i:i+len_sub] == subsequence_list:
+            return i
+    return -1 # Not found

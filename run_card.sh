@@ -13,7 +13,7 @@ set -x
 
 export ACTOR_NUM_GPUS=4
 export BATCH_SIZE_PER_GPU=8
-export GRAD_ACCUM_STEPS=8
+export GRAD_ACCUM_STEPS=4
 export GLOBAL_BATCH_SIZE=$((ACTOR_NUM_GPUS * BATCH_SIZE_PER_GPU * GRAD_ACCUM_STEPS))
 # export GLOBAL_BATCH_SIZE=$((ACTOR_NUM_GPUS * BATCH_SIZE_PER_GPU))
 
@@ -73,10 +73,11 @@ ray job submit --address="http://127.0.0.1:8265" \
    --colocate_actor_vllm \
    --vllm_enable_sleep \
    --enforce_eager \
-   --eval \
    --gamma 1.0 \
-   --seed 7 \
+   --seed 1029 \
    --use_reward_diff \
+   --eval \
+   --reasoning_logprob_weight 0.5 \
    # --distillation \
    # --distillation_coef 0.5 \
    # --multimodal \
