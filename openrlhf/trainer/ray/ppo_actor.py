@@ -2390,14 +2390,14 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
                 ref = self.critic.save_checkpoint.remote(tag)
             self.strategy.save_ckpt(
                 self.actor.model,
-                os.path.join(args.ckpt_path, "_actor"),
+                os.path.join(args.output_log_dir, "_actor"),
                 tag,
                 args.max_ckpt_num,
                 args.max_ckpt_mem,
                 client_states,
             )
         if self.save_hf_ckpt:
-            save_path = os.path.join(args.ckpt_path, f"{tag}_hf")
+            save_path = os.path.join(args.output_log_dir, f"{tag}_hf")
             self.strategy.save_model(
                 self.ema_model if args.enable_ema else self.actor,
                 self.processor,

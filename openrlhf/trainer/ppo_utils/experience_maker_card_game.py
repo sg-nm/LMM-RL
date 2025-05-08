@@ -1322,6 +1322,12 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
 
         ray.get(refs)
 
+        # Make sure all requests are sent.
+        if self.strategy.ring_attn_group is None:
+            torch.distributed.barrier()
+        else:
+            time.sleep(3)
+
         # Retrieve and combine results from all outputs
         all_output_refs = []
         for i, llm in enumerate(llms):
@@ -1809,6 +1815,12 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             refs.append(llm.add_requests.remote(rank, sampling_params=sampling_params, vllm_vision_input=prompt))
 
         ray.get(refs)
+
+        # Make sure all requests are sent.
+        if self.strategy.ring_attn_group is None:
+            torch.distributed.barrier()
+        else:
+            time.sleep(3)
 
         # Retrieve and combine results from all outputs
         all_output_refs = []

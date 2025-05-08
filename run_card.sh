@@ -55,7 +55,7 @@ ray job submit --address="http://127.0.0.1:8265" \
    --actor_learning_rate 5e-7 \
    --normalize_reward \
    --gradient_checkpointing \
-   --save_steps -1 \
+   --save_steps 50 \
    --ckpt_path ./openrlhf/textgrad/checkpoint/qwen25-3-7B \
    --use_wandb 'suganuma' \
    --num_episodes 300 \
@@ -74,10 +74,10 @@ ray job submit --address="http://127.0.0.1:8265" \
    --vllm_enable_sleep \
    --enforce_eager \
    --gamma 1.0 \
-   --seed 1029 \
+   --seed 99 \
    --use_reward_diff \
    --eval \
-   --reasoning_logprob_weight 0.5 \
+   --reasoning_logprob_weight 1.0 \
    # --distillation \
    # --distillation_coef 0.5 \
    # --multimodal \

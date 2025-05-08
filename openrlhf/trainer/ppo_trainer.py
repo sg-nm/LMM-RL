@@ -722,11 +722,11 @@ class PPOTrainer(ABC):
             # self.evaluate(self.eval_dataloader, global_step)
             pass
         
-        # # save ckpt
-        # # TODO: save best model on dev, use loss/perplexity/others on whole dev dataset as metric
-        # if global_step % args.save_steps == 0:
-        #     tag = f"global_step{global_step}"
-        #     self._save_checkpoint(args, tag, client_states)
+        # save ckpt
+        # TODO: save best model on dev, use loss/perplexity/others on whole dev dataset as metric
+        if global_step % args.save_steps == 0 and global_step > 0:
+            tag = f"global_step{global_step}"
+            self._save_checkpoint(args, tag, client_states)
 
     def _save_checkpoint(self, args, tag, client_states):
         raise NotImplementedError("This method should be implemented by the subclass.")
