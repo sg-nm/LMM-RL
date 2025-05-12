@@ -9,6 +9,7 @@ from ray.util.placement_group import placement_group
 from openrlhf.trainer.ray import (
     ActorModelRayActor_Card,
     CriticModelRayActor,
+    CriticModelRayActor_CARD,
     PPORayActorGroup,
     ReferenceModelRayActor,
     ReferenceModelRayActor_multimodal,
@@ -25,10 +26,6 @@ def reward_fn(rewards: List[torch.Tensor]):
 
 def _validate_args(args):
     actor_world_size = args.actor_num_nodes * args.actor_num_gpus_per_node
-
-    # assert (
-    #     args.rollout_batch_size % actor_world_size == 0
-    # ), f"rollout_bach_size must be divisible by actor_world_size, got {args.rollout_batch_size} and {actor_world_size}"
 
     assert args.zero_stage != 3 or args.vllm_num_engines > 0, f"ZeRO-3 is only supported when vLLM enabled"
 
@@ -80,15 +77,6 @@ def train(args):
     vllm_engines = None
     if args.vllm_num_engines is not None and args.vllm_num_engines > 0:
         max_len = args.max_len if args.max_len else args.prompt_max_len + args.generate_max_len
-        # if args.colocate_all_models:
-        #     assert (
-        #         args.actor_num_nodes * args.actor_num_gpus_per_node
-        #         == args.vllm_num_engines * args.vllm_tensor_parallel_size
-        #     ), (
-        #         f"actor_num_nodes * actor_num_gpus_per_node must be equal to "
-        #         f"vllm_num_engines * vllm_tensor_parallel_size, got {args.actor_num_nodes * args.actor_num_gpus_per_node} "
-        #         f"and {args.vllm_num_engines * args.vllm_tensor_parallel_size}"
-        #     )
         if args.colocate_actor_vllm:
             assert (
                 args.actor_num_nodes * args.actor_num_gpus_per_node
@@ -113,34 +101,6 @@ def train(args):
             args.vllm_enable_sleep,
         )
     
-    # Feed-back model
-    bundles = [{"GPU": 1, "CPU": 1} for _ in range(args.feedback_vllm_num_engines * args.feedback_vllm_tensor_parallel_size)]
-    pg_feedback = placement_group(bundles, strategy="PACK")
-    ray.get([pg_feedback.ready()])
-    feedback_vllm_engines = None
-    if args.feedback_vllm_num_engines is not None and args.feedback_vllm_num_engines > 0:
-        max_len = args.max_len if args.max_len else args.prompt_max_len + args.generate_max_len
-        # if args.colocate_all_models:
-        #     assert (args.actor_num_nodes * args.actor_num_gpus_per_node == args.feedback_vllm_num_engines * args.feedback_vllm_tensor_parallel_size), (
-        #         f"actor_num_nodes * actor_num_gpus_per_node must be equal to "
-        #         f"feedback_vllm_num_engines * feedback_vllm_tensor_parallel_size, got {args.actor_num_nodes * args.actor_num_gpus_per_node} "
-        #         f"and {args.feedback_vllm_num_engines * args.feedback_vllm_tensor_parallel_size}"
-        #     )
-
-        feedback_vllm_engines = create_vllm_engines(
-            args.feedback_vllm_num_engines,
-            args.feedback_vllm_tensor_parallel_size,
-            args.feedback_model,
-            args.seed,
-            args.enable_prefix_caching,
-            args.enforce_eager,
-            max_len,
-            args.actor_num_nodes * args.actor_num_gpus_per_node // args.ring_attn_size,
-            pg_feedback,
-            args.vllm_gpu_memory_utilization,
-            args.vllm_enable_sleep,
-        )
-
     # Actor model (Policy model)
     actor_model = PPORayActorGroup(
         args.actor_num_nodes,
@@ -149,9 +109,6 @@ def train(args):
         pg=pg,
         num_gpus_per_actor=0.2 if pg else 1,
     )
-
-    # Feedback model
-    feedback_model = feedback_vllm_engines
 
     if args.init_kl_coef == 0:
         ref_model = None
@@ -182,7 +139,7 @@ def train(args):
         critic_model = PPORayActorGroup(
             args.critic_num_nodes,
             args.critic_num_gpus_per_node,
-            CriticModelRayActor,
+            CriticModelRayActor_CARD,
             pg=pg,
             num_gpus_per_actor=0.2 if pg else 1,
         )
@@ -229,8 +186,8 @@ def train(args):
 
     
     # train actor and critic model
-    refs = actor_model.async_fit_actor_model_feedback(
-        critic_model, ref_model, reward_models, args.remote_rm_url, reward_fn=reward_fn, vllm_engines=vllm_engines, feedback_model=feedback_model
+    refs = actor_model.async_fit_actor_model(
+        critic_model, ref_model, reward_models, args.remote_rm_url, reward_fn=reward_fn, vllm_engines=vllm_engines
     )
     ray.get(refs)
 
@@ -489,6 +446,8 @@ if __name__ == "__main__":
     parser.add_argument("--actor_loss_coef", type=float, default=1.0, help="weight for actor loss")
     parser.add_argument("--delta_coef", type=float, default=0.7, help="weight for delta reward")
     parser.add_argument("--reward_coef", type=float, default=1.0, help="weight for standard reward")
+    parser.add_argument("--no_verification", action="store_true", default=False)
+    parser.add_argument("--normalize_advantages", action="store_true", default=False, help="Normalize advantages")
     # parser.add_argument("--feedback_mixed_ratio", type=float, default=0.0, help="ratio of how much feedback prompts are used for training")
 
 

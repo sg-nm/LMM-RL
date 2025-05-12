@@ -42,6 +42,8 @@ class BufferItem:
     attention_mask_for_KL: Optional[torch.LongTensor]
     action_mask_for_KL: Optional[torch.BoolTensor]
     reward_diff: Optional[torch.Tensor]
+    input_ids: Optional[torch.Tensor]
+    attention_mask_for_input_ids: Optional[torch.LongTensor]
 
 
 def split_input_batch(batch: Dict, tokenizer) -> List[Dict]:
@@ -412,6 +414,8 @@ class ReplayBuffer_CARDGAME(ABC):
             "attention_mask_for_KL",
             "action_mask_for_KL",
             "reward_diff",
+            "attention_mask_for_input_ids",
+            "input_ids",
         )
         for key in keys:
             value = getattr(experience, key)
@@ -527,12 +531,14 @@ class ReplayBuffer_CARDGAME(ABC):
             "attention_mask_for_KL",
             "action_mask_for_KL",
             "reward_diff",
+            "input_ids",
+            "attention_mask_for_input_ids",
         )
         for key in keys:
             vals = [getattr(item, key) for item in items]
-            if not packing_samples and not (key == "returns" or key == "advantages" or key == "reward_diff"):
+            if not packing_samples and not (key == "returns" or key == "advantages" or key == "reward_diff" or key == "values"):
                 batch_data = zero_pad_sequences(vals, "left") if vals[0] is not None else None
-            elif not packing_samples and (key == "returns" or key == "advantages" or key == "reward_diff"):
+            elif not packing_samples and (key == "returns" or key == "advantages" or key == "reward_diff" or key == "values"):
                 batch_data = torch.stack(vals, dim=0) if vals[0] is not None else None
             else:
                 batch_data = vals if vals[0] is not None else None
@@ -574,6 +580,11 @@ class ReplayBuffer_CARDGAME(ABC):
                 att_mask[left_pad:right_pad],
                 act_mask[:right_pad],
             )
+
+            if item.input_ids is not None and item.attention_mask_for_input_ids is not None:
+                left_pad = item.attention_mask_for_input_ids.long().argmax()
+                item.input_ids = item.input_ids[left_pad:]
+                item.attention_mask_for_input_ids = item.attention_mask_for_input_ids[left_pad:]
 
             if item.action_mask_for_KL is not None and item.attention_mask_for_KL is not None and item.sequences_for_KL is not None:
                 seq_for_kl, att_mask_for_kl, act_mask_for_kl = (

@@ -497,14 +497,16 @@ class PPOTrainer(ABC):
             actor_loss = self.actor_loss_fn(
                 action_log_probs,
                 old_action_log_probs,
-                advantages if not self.args.use_reward_diff else reward_diff,
+                # advantages if not self.args.use_reward_diff else reward_diff, # 20250508
+                advantages if not self.args.use_reward_diff else self.args.delta_coef * reward_diff + self.args.reward_coef * advantages,   # new
                 action_mask=weighted_action_mask,
             )
         else:
             actor_loss = self.actor_loss_fn(
                 action_log_probs,
                 old_action_log_probs,
-                advantages if not self.args.use_reward_diff else reward_diff,
+                # advantages if not self.args.use_reward_diff else reward_diff, # 20250508
+                advantages if not self.args.use_reward_diff else self.args.delta_coef * reward_diff + self.args.reward_coef * advantages,   # new
                 action_mask=experience.action_mask,
             )
 
@@ -610,7 +612,9 @@ class PPOTrainer(ABC):
         #     print(f"Training actor done: {status}")
         return status
 
-    def training_step_critic(self, experience: Experience) -> Dict[str, float]:
+    
+    
+    def training_step_critic(self, experience: Experience_CARDGAME) -> Dict[str, float]:
         self.critic.train()
 
         # TODO: this is a bad indicator to say that data is packed...
@@ -631,25 +635,37 @@ class PPOTrainer(ABC):
                 )
 
         else:
-            sequences = experience.sequences
+            sequences = experience.input_ids
             old_values = experience.values
             returns = experience.returns
-            num_actions = experience.action_mask.size(1)
+            # action_mask = experience.action_mask
+            # num_actions = experience.action_mask.size(1)
             packed_seq_lens = None
-            attention_mask = experience.attention_mask
+            attention_mask = experience.attention_mask_for_input_ids
             visual_inputs = experience.visual_inputs
 
         # critic loss
-        values, output = self.critic(
-            sequences,
-            num_actions=num_actions,
-            attention_mask=attention_mask,
-            return_output=True,
-            ring_attn_group=self.strategy.ring_attn_group,
-            values_allgather=True,
-            packed_seq_lens=packed_seq_lens,
-            visual_inputs=visual_inputs,
-        )
+        if self.args.multimodal:
+            values, output = self.critic(
+                sequences,
+                num_actions=num_actions,
+                attention_mask=attention_mask,
+                return_output=True,
+                ring_attn_group=self.strategy.ring_attn_group,
+                values_allgather=True,
+                packed_seq_lens=packed_seq_lens,
+                visual_inputs=visual_inputs,
+            )
+        else:
+            values, output = self.critic(
+                sequences,
+                action_mask=None,
+                attention_mask=attention_mask,
+                return_output=True,
+                ring_attn_group=self.strategy.ring_attn_group,
+                values_allgather=True,
+                packed_seq_lens=packed_seq_lens,
+            )
         # unpad sequence ensures that pad tokens do not contribute to the loss calculation
         if self.strategy.ring_attn_group is not None:
             assert pad_len is not None
@@ -668,7 +684,7 @@ class PPOTrainer(ABC):
             values,
             old_values,
             returns,
-            action_mask=experience.action_mask,
+            # action_mask=experience.action_mask,
         )
         # mixtral
         if self.aux_loss:

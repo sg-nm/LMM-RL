@@ -76,6 +76,10 @@ class RolloutStorage:
     attention_mask_for_KL: Optional[torch.Tensor] = None
     action_mask_for_KL: Optional[torch.Tensor] = None
     reward_diff: Optional[torch.Tensor] = None
+    input_ids: Optional[torch.Tensor] = None
+    attention_mask_for_input_ids: Optional[torch.Tensor] = None
+    values: Optional[torch.Tensor] = None
+    advantages: Optional[torch.Tensor] = None
 
     # Optional: Add a method for easy validation
     def __post_init__(self):
@@ -136,6 +140,8 @@ class Experience_CARDGAME:
     attention_mask_for_KL: Optional[torch.Tensor] = None
     action_mask_for_KL: Optional[torch.Tensor] = None
     reward_diff: Optional[torch.Tensor] = None
+    input_ids: Optional[torch.Tensor] = None
+    attention_mask_for_input_ids: Optional[torch.Tensor] = None
 
 
     @torch.no_grad()
@@ -159,6 +165,8 @@ class Experience_CARDGAME:
         self.sequences_for_KL = to(self.sequences_for_KL, device)
         self.attention_mask_for_KL = to(self.attention_mask_for_KL, device)
         self.action_mask_for_KL = to(self.action_mask_for_KL, device)
+        self.input_ids = to(self.input_ids, device)
+        self.attention_mask_for_input_ids = to(self.attention_mask_for_input_ids, device)
         return self
 
     def pin_memory(self):
@@ -181,6 +189,8 @@ class Experience_CARDGAME:
         self.sequences_for_KL = pin_memory(self.sequences_for_KL)
         self.attention_mask_for_KL = pin_memory(self.attention_mask_for_KL)
         self.action_mask_for_KL = pin_memory(self.action_mask_for_KL)
+        self.input_ids = pin_memory(self.input_ids)
+        self.attention_mask_for_input_ids = pin_memory(self.attention_mask_for_input_ids)
         return self
     
 
@@ -314,7 +324,8 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
                 assert len(previous_responses[i]) == len(previous_feedbacks[i]) == len(previous_verify_infos[i]), "The number of previous responses, feedbacks, and verify infos must be the same."
                 feedback_prompt = FEEDBACK_PROMPT_BASE_CARD.format(task=task_prompts[i])
                 contents.append(feedback_prompt)
-                contents_no_feedback.append(task_prompts[i])
+                contents_no_feedback.append(feedback_prompt)
+                # contents_no_feedback.append(task_prompts[i])
                 for idx, (prev_response, prev_feedback, prev_verify_info) in enumerate(zip(previous_responses[i][-self.history_length:], previous_feedbacks[i][-self.history_length:], previous_verify_infos[i][-self.history_length:])):
                     contents.append(f"\n## Previous your answer ({self.history_length - idx} steps ago):\n{prev_response}")
                     contents.append(f"\n## Verification message\nYou failed this trial because {prev_verify_info}")
@@ -574,7 +585,11 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             reward_diff = torch.zeros_like(rewards_tensor, dtype=torch.float32)
             for i in range(self.num_envs):
                 if len(previous_rewards[i]) > 0:
-                    reward_diff[i] = rewards[i] - previous_rewards[i][-1]
+                    # reward_diff[i] = rewards[i] - previous_rewards[i][-1] # until 0508
+                    if previous_rewards[i][-1] != 0:
+                        reward_diff[i] = (rewards[i] - previous_rewards[i][-1]) / math.fabs(previous_rewards[i][-1])
+                    else:
+                        reward_diff[i] = rewards[i] - previous_rewards[i][-1]
                 else:
                     reward_diff[i] = rewards[i]
             mini_batch.reward_diff = reward_diff
@@ -987,12 +1002,26 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             base_action_log_probs_ref = ray.put([None] * len(seq_chunk_cpu_list))
         
         
+        # values
+        if self.critic is not None:
+            value_ref = self.critic.forward_batch.remote(
+                sequences=seq_chunk_cpu_list,
+                action_mask=action_mask_chunk_cpu_list,
+                attention_mask=attn_chunk_cpu_list,
+            )
+            # avoid CUDA OOM when colocate models
+            if args.colocate_critic_reward or args.colocate_all_models:
+                ray.get([value_ref])
+                ray.get([self.critic.empty_cache.remote()])
+        else:
+            value_ref = ray.put([None] * len(seq_chunk_cpu_list))
+        
+        
         # Initialize lists to store results
         all_action_log_probs = []
 
         # Process each chunk
         for i in range(len(sequences_chunks)):
-            # Clear GPU cache before processing new chunk
             torch.cuda.empty_cache()
 
             # Get current chunk
@@ -1022,6 +1051,12 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
         if base_action_log_probs_list[0] is not None:
             base_action_log_probs_list = [base_action_log_probs_list[i].to(device) for i in range(len(base_action_log_probs_list))]
         base_action_log_probs = torch.cat(base_action_log_probs_list, dim=0)
+        
+        # values
+        values_list = ray.get([value_ref])[0]
+        if values_list[0] is not None:
+            values_list = [values_list[i].to(device) for i in range(len(values_list))]
+        values = torch.cat(values_list, dim=0)
         
         # # Concatenate results
         action_log_probs = torch.cat(all_action_log_probs, dim=0)
@@ -1065,7 +1100,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
                     packed_seq_lens=packed_seq_lens,
                     ring_attn_group=self.strategy.ring_attn_group,
                     action_log_probs=action_log_probs,
-                    values=None,
+                    values=values,
                     kl=kl,
                 )
             # Convert tensor into list of tensors for easier manipulation within dataset
@@ -1098,7 +1133,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             sequences,
             action_log_probs,
             base_action_log_probs,
-            values=None,
+            values=values,
             returns=mini_batch.returns,
             advantages=mini_batch.returns,
             attention_mask=attention_mask,
@@ -2121,7 +2156,8 @@ class RemoteExperienceMaker_CardGame_REINFORCE(NaiveExperienceMaker):
                     contents_no_verification.append({"type": "image", "image": pil_image})
                 base_prompt = PROMPT_BASE_CARD_REINFORCE.format(task=task_prompt)
                 contents.append({"type": "text", "text": base_prompt})
-                contents_no_verification.append({"type": "text", "text": task_prompt})
+                contents_no_verification.append({"type": "text", "text": base_prompt})
+                # contents_no_verification.append({"type": "text", "text": task_prompt})
                 for idx, (prev_response, prev_verify_info) in enumerate(zip(previous_responses[i][-self.history_length:], previous_verify_infos[i][-self.history_length:])):
                     contents.append({"type": "text", "text": f"\n## Previous your response ({self.history_length - idx} steps ago):\n{prev_response}"})
                     contents.append({"type": "text", "text": f"\n## Verification\nYou failed this trial because {prev_verify_info}"})
@@ -2162,7 +2198,8 @@ class RemoteExperienceMaker_CardGame_REINFORCE(NaiveExperienceMaker):
                 assert len(previous_responses[i]) == len(previous_verify_infos[i]), "The number of previous responses, and verify infos must be the same."
                 feedback_prompt = PROMPT_BASE_CARD_REINFORCE.format(task=task_prompts[i])
                 contents.append(feedback_prompt)
-                contents_no_verification.append(task_prompts[i])
+                contents_no_verification.append(feedback_prompt)
+                # contents_no_verification.append(task_prompts[i])
                 for idx, (prev_response, prev_verify_info) in enumerate(zip(previous_responses[i][-self.history_length:], previous_verify_infos[i][-self.history_length:])):
                     contents.append(f"\n## Previous your answer ({self.history_length - idx} steps ago):\n{prev_response}")
                     contents.append(f"\n## Verification message\nYou failed this trial because {prev_verify_info}")
@@ -2230,14 +2267,14 @@ class RemoteExperienceMaker_CardGame_REINFORCE(NaiveExperienceMaker):
                                     previous_responses=previous_responses,
                                     previous_verify_infos=previous_verify_infos)
             
-            # base model inference w/o feedback
+            # base model inference w/o verification
             if self.strategy.args.no_verification:
                 if self.multimodal:
                     mini_batch = self._generate_vllm(obs_batch, messages_no_verification, self.multimodal, **generate_kwargs)
                 else:
                     mini_batch = self._generate_vllm_language(messages_no_verification, **generate_kwargs)
             else:
-                # base model inference w/ feedback
+                # base model inference w/ verification
                 if self.multimodal:
                     mini_batch = self._generate_vllm(obs_batch, messages, self.multimodal, **generate_kwargs)
                 else:
@@ -2382,6 +2419,81 @@ class RemoteExperienceMaker_CardGame_REINFORCE(NaiveExperienceMaker):
         print(f"Successfully computed and stored returns in {buffer_len} buffer elements.")
 
     
+    def compute_values(self, replay_buffer: Deque[RolloutStorage]) -> None:
+        args = self.strategy.args
+        device = torch.cuda.current_device()
+        chunk_size = self.strategy.args.micro_train_batch_size
+        buffer_len = len(replay_buffer)
+        for turn in range(buffer_len):
+            mini_batch = replay_buffer[turn]
+            input_ids = mini_batch.input_ids
+            input_ids_chunks = self.split_into_chunks(input_ids, chunk_size)
+            input_ids_chunk_cpu_list = [input_ids_chunk.to("cpu") for input_ids_chunk in input_ids_chunks]
+            attention_mask_for_input_ids_chunks = self.split_into_chunks(mini_batch.attention_mask_for_input_ids, chunk_size)
+            attention_mask_for_input_ids_chunk_cpu_list = [attention_mask_for_input_ids_chunk.to("cpu") for attention_mask_for_input_ids_chunk in attention_mask_for_input_ids_chunks]
+
+            # compute values
+            value_ref = self.critic.forward_batch.remote(
+                sequences=input_ids_chunk_cpu_list,
+                attention_mask=attention_mask_for_input_ids_chunk_cpu_list,
+            )
+            # avoid CUDA OOM when colocate models
+            if args.colocate_critic_reward or args.colocate_all_models:
+                ray.get([value_ref])
+                ray.get([self.critic.empty_cache.remote()])
+            
+            values_list = ray.get([value_ref])[0]
+            if values_list[0] is not None:
+                values_list = [values_list[i].to(device) for i in range(len(values_list))]
+            values = torch.cat(values_list, dim=0)
+            # store values
+            mini_batch.values = values.squeeze(-1) # Shape: (num_envs, )
+            # print(f"mini_batch.values.shape: {mini_batch.values.shape}")
+
+    
+    
+    @torch.no_grad()
+    def compute_advantages_and_returns(
+        self,
+        replay_buffer: Deque[RolloutStorage],
+        gamma: float,
+        lambd: float,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Compute advantages and returns of each turn for multi-turn envs.
+        """
+        
+        T = len(replay_buffer)
+        device = replay_buffer[0].rewards.device
+        advantages_reversed = []
+        lastgaelam = 0.0
+
+        for t in reversed(range(T)):
+            # 1. non-terminal flag: 1 if episode is still running AFTER step t
+            nonterminal = 1.0 - replay_buffer[t].masks               # masks==1 ➜ done
+            if hasattr(replay_buffer[t], "bad_masks"):                # optional time-limit reset
+                nonterminal = nonterminal * replay_buffer[t].bad_masks
+
+            nonterminal = nonterminal.to(device)
+            next_value = replay_buffer[t + 1].values.to(device) if t < T - 1 else 0.0
+
+            delta = replay_buffer[t].rewards + gamma * next_value * nonterminal - replay_buffer[t].values.to(device)
+
+            lastgaelam = delta + gamma * lambd * nonterminal * lastgaelam
+            advantages_reversed.append(lastgaelam)
+            replay_buffer[t].returns    = lastgaelam + replay_buffer[t].values.to(device)
+            replay_buffer[t].advantages = lastgaelam
+
+        # (optional) Normalize once, in-place
+        if self.strategy.args.normalize_advantages:
+            advantages_chronological = advantages_reversed[::-1]
+            advantages = torch.stack(advantages_chronological, dim=0).to(torch.float32)
+            adv_mean, adv_std = advantages.mean(), advantages.std()
+            advantages = (advantages - adv_mean) / (adv_std + 1e-6)
+            for t in range(T):
+                replay_buffer[t].advantages = advantages[t]
+
+    
     @torch.no_grad()
     def make_experience_list(self, episode_id: int=None, **generate_kwargs) -> List[Experience_CARDGAME]:
         
@@ -2409,18 +2521,44 @@ class RemoteExperienceMaker_CardGame_REINFORCE(NaiveExperienceMaker):
         # compute cumulative returns
         self.compute_and_store_returns_in_buffer(replay_buffer, generate_kwargs["gamma"])
 
+        if self.critic is not None:
+            print("compute_values...")
+            self.compute_values(replay_buffer)
+
+        if self.strategy.args.advantage_estimator == "gae":
+            self.compute_advantages_and_returns(replay_buffer, generate_kwargs["gamma"], generate_kwargs["lambd"])
+        
         all_experiences = []
         for mini_batch in tqdm(replay_buffer, total=len(replay_buffer), desc="make_experience", disable=not self.strategy.is_rank_0()):
             if self.multimodal:
                 experience = self.make_experience(mini_batch)
             else:
                 experience = self.make_experience_language(mini_batch)
+            
+            # # compute advantages and returns for PPO
+            # if self.strategy.args.advantage_estimator == "gae":
+            #     experience.advantages, experience.returns = self.get_advantages_and_returns(
+            #         values=experience.values,
+            #         reward=experience.info["reward"],
+            #         action_mask=experience.action_mask,
+            #         gamma=generate_kwargs["gamma"],
+            #         lambd=generate_kwargs["lambd"],
+            #     )
+
             # remove unnecessary info
             experience.kl = None
             del experience.info["num_actions"]
             experience.to_device("cpu")
             all_experiences.append(experience)
 
+        
+        if self.critic is not None:
+            for experience in all_experiences:
+                # send experience to critic
+                experience_cpu = deepcopy(experience)
+                experience_cpu.to_device("cpu")
+                self._ref = self.critic.append.remote(experience_cpu)
+        
         return all_experiences
 
     def split_into_chunks(self, data, chunk_size):
@@ -2644,6 +2782,13 @@ class RemoteExperienceMaker_CardGame_REINFORCE(NaiveExperienceMaker):
         attention_mask = mini_batch.attention_mask
         action_mask = mini_batch.action_mask
         packed_seq_lens = mini_batch.packed_seq_lens
+        # values = mini_batch.values
+        # if self.critic is not None:
+        #     input_ids = mini_batch.input_ids
+        #     input_ids_chunks = self.split_into_chunks(input_ids, chunk_size)
+        #     input_ids_chunk_cpu_list = [input_ids_chunk.to("cpu") for input_ids_chunk in input_ids_chunks]
+        #     attention_mask_for_input_ids_chunks = self.split_into_chunks(mini_batch.attention_mask_for_input_ids, chunk_size)
+        #     attention_mask_for_input_ids_chunk_cpu_list = [attention_mask_for_input_ids_chunk.to("cpu") for attention_mask_for_input_ids_chunk in attention_mask_for_input_ids_chunks]
 
         # Split data into chunks
         sequences_chunks = self.split_into_chunks(sequences, chunk_size)
@@ -2672,6 +2817,20 @@ class RemoteExperienceMaker_CardGame_REINFORCE(NaiveExperienceMaker):
                 ray.get([self.initial_model.empty_cache.remote()])
         else:
             base_action_log_probs_ref = ray.put([None] * len(seq_chunk_cpu_list))
+        
+        
+        # # values
+        # if self.critic is not None:
+        #     value_ref = self.critic.forward_batch.remote(
+        #         sequences=input_ids_chunk_cpu_list,
+        #         attention_mask=attention_mask_for_input_ids_chunk_cpu_list,
+        #     )
+        #     # avoid CUDA OOM when colocate models
+        #     if args.colocate_critic_reward or args.colocate_all_models:
+        #         ray.get([value_ref])
+        #         ray.get([self.critic.empty_cache.remote()])
+        # else:
+        #     value_ref = ray.put([None] * len(seq_chunk_cpu_list))
         
         
         # Initialize lists to store results
@@ -2709,6 +2868,12 @@ class RemoteExperienceMaker_CardGame_REINFORCE(NaiveExperienceMaker):
         if base_action_log_probs_list[0] is not None:
             base_action_log_probs_list = [base_action_log_probs_list[i].to(device) for i in range(len(base_action_log_probs_list))]
         base_action_log_probs = torch.cat(base_action_log_probs_list, dim=0)
+        
+        # # values
+        # values_list = ray.get([value_ref])[0]
+        # if values_list[0] is not None:
+        #     values_list = [values_list[i].to(device) for i in range(len(values_list))]
+        # values = torch.cat(values_list, dim=0)
         
         # # Concatenate results
         action_log_probs = torch.cat(all_action_log_probs, dim=0)
@@ -2752,7 +2917,7 @@ class RemoteExperienceMaker_CardGame_REINFORCE(NaiveExperienceMaker):
                     packed_seq_lens=packed_seq_lens,
                     ring_attn_group=self.strategy.ring_attn_group,
                     action_log_probs=action_log_probs,
-                    values=None,
+                    values=None, # if we consider turn-level values, we need to pass None here.
                     kl=kl,
                 )
             # Convert tensor into list of tensors for easier manipulation within dataset
@@ -2785,14 +2950,17 @@ class RemoteExperienceMaker_CardGame_REINFORCE(NaiveExperienceMaker):
             sequences,
             action_log_probs,
             base_action_log_probs,
-            values=None,
+            values=mini_batch.values if self.critic is not None else None,
             returns=mini_batch.returns,
-            advantages=mini_batch.returns,
+            # advantages=mini_batch.returns,
+            advantages=mini_batch.advantages if self.critic is not None else mini_batch.returns,
             attention_mask=attention_mask,
             action_mask=mini_batch.action_mask,
             info=info,
             kl=kl,
             visual_inputs=None,
+            input_ids=mini_batch.input_ids if self.critic is not None else None,
+            attention_mask_for_input_ids=mini_batch.attention_mask_for_input_ids if self.critic is not None else None,
         )
 
         self.actor.train()  # Reset model state
@@ -3033,6 +3201,7 @@ class RemoteExperienceMaker_CardGame_REINFORCE(NaiveExperienceMaker):
 
         pad_token_id, eos_token_id = self.tokenizer.pad_token_id, self.tokenizer.eos_token_id
         sequences = []
+        input_ids_for_PPO = []
         for j, output in enumerate(all_outputs):
             # left padding input
             input_len = len(output.prompt_token_ids)
@@ -3042,7 +3211,9 @@ class RemoteExperienceMaker_CardGame_REINFORCE(NaiveExperienceMaker):
             output_ids = list(output.outputs[0].token_ids) + [pad_token_id] * (max_output_len - output_len)
             # concat input and output
             sequences.append(input_ids + output_ids)
-
+            if self.critic is not None:
+                input_ids_for_PPO.append(input_ids)
+        
         sequences = torch.tensor(sequences)
         sequences, attention_mask, action_mask = self.actor.process_sequences(
             sequences, max_input_len, eos_token_id, pad_token_id
@@ -3052,6 +3223,20 @@ class RemoteExperienceMaker_CardGame_REINFORCE(NaiveExperienceMaker):
         action_mask = action_mask.to("cuda")
 
         self.response_length_list.extend(attention_mask.float().sum(dim=-1).tolist())
+
+        if self.critic is not None:
+            input_ids_for_PPO = torch.tensor(input_ids_for_PPO)
+            # For Llama3 and Qwen2 models, there are some eos_tokens in the middle of the prompt.
+            attention_mask_for_input_ids = (input_ids_for_PPO.ne(eos_token_id) & input_ids_for_PPO.ne(pad_token_id)).to(dtype=torch.long)
+            seq_length = attention_mask_for_input_ids.size(1)
+            eos_indices = seq_length - attention_mask_for_input_ids.long().fliplr().argmax(dim=1, keepdim=True).clamp(min=1)
+            input_ids_for_PPO.scatter_(dim=1, index=eos_indices, value=eos_token_id)
+            first_token_indices = attention_mask_for_input_ids.long().argmax(dim=1, keepdim=True)
+            mask = torch.arange(seq_length).unsqueeze(0).expand(input_ids_for_PPO.size(0), -1).to(device=input_ids_for_PPO.device)
+            attention_mask_for_input_ids = (mask >= first_token_indices) & (mask <= eos_indices).to(dtype=torch.long)
+            attention_mask_for_input_ids = attention_mask_for_input_ids.to("cuda")
+            input_ids_for_PPO = input_ids_for_PPO.to("cuda")
+
 
         mini_batch = RolloutStorage(
                         sequences=sequences,
@@ -3070,6 +3255,8 @@ class RemoteExperienceMaker_CardGame_REINFORCE(NaiveExperienceMaker):
                         bad_masks=None,
                         action_log_probs=None,
                         prompt=prompts,
+                        input_ids=input_ids_for_PPO if self.strategy.args.advantage_estimator == "gae" else None,
+                        attention_mask_for_input_ids=attention_mask_for_input_ids if self.strategy.args.advantage_estimator == "gae" else None
         )
 
         return mini_batch

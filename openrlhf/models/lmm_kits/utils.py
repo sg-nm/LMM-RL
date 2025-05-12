@@ -51,8 +51,8 @@ def load_patch(pretrain_or_model=None,model_type=None, use_liger_kernel=False):
     # only and only one of pretrain_or_model and model_type should be provided
     # use xor to check
     assert (pretrain_or_model is not None) ^ (model_type is not None), "only and only one of pretrain_or_model and model_type should be provided"
-    root_path = _get_kit_root_path(pretrain_or_model,model_type)
-    module = importlib.import_module(f"{root_path}.patch",package="openrlhf")
+    root_path = _get_kit_root_path(pretrain_or_model, model_type)
+    module = importlib.import_module(f"{root_path}.patch", package="openrlhf")
     Patch = getattr(module, "Patch")
     Patch.load_all_patches(use_liger_kernel=use_liger_kernel)
 

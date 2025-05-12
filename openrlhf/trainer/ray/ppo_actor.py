@@ -1888,7 +1888,7 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
             multimodal=self.strategy.args.multimodal,
         )
 
-        if self.strategy.args.advantage_estimator == "reinforce":
+        if self.strategy.args.advantage_estimator == "reinforce" or self.strategy.args.advantage_estimator == "gae":
                 self.experience_maker = RemoteExperienceMaker_CardGame_REINFORCE(
                 actor=self.actor,
                 critic=self.critic,

@@ -325,16 +325,54 @@ class GeneralPointEnv_oneline(gym.Env):
 
 
 if __name__ == "__main__":
-    env = GeneralPointEnv_oneline(treat_face_cards_as_10=True, target_points=24, resolution=1200, show_eqn=True, verify_iter=5, ood=False, language_only=False, face_cards_color='mixed', seed=42)
-    _, info = env.reset()
-    gt_cards = info["Plain Cards"]
-    gt_nums = info["Numbers"]
+    # env = GeneralPointEnv_oneline(treat_face_cards_as_10=True, target_points=24, resolution=1200, show_eqn=True, verify_iter=5, ood=False, language_only=False, face_cards_color='mixed', seed=42)
+    # _, info = env.reset()
+    # gt_cards = info["Plain Cards"]
+    # gt_nums = info["Numbers"]
 
-    cards = gt_cards
-    nums = gt_nums
-    model_response =  "{\n  \"cards\": [\"K\", \"6\", \"8\", \"8\"],\n  \"number\": [10, 6, 8, 8],\n  \"thought\": \"I need to find a way to combine these numbers using the operations to reach 24. I could try adding and subtracting to get a smaller number or find a way to use multiplication and division.\",\n  \"formula\": \"(10 * (8 - 6)) + 8 = 24\"\n}"
-    action = "{\n  \"cards\": " + str(cards) + ",\n  \"number\": " + str(nums) + ",\n  \"formula\": " + "\"(10 * (8 - 6)) + 8 = 24\"" + "\n}"
-    print(f"model_response: {model_response}")
-    print(f"action: {action}")
-    _, _, _, _, info = env.step(action)
+    # cards = gt_cards
+    # nums = gt_nums
+    # model_response =  "{\n  \"cards\": [\"K\", \"6\", \"8\", \"8\"],\n  \"number\": [10, 6, 8, 8],\n  \"thought\": \"I need to find a way to combine these numbers using the operations to reach 24. I could try adding and subtracting to get a smaller number or find a way to use multiplication and division.\",\n  \"formula\": \"(10 * (8 - 6)) + 8 = 24\"\n}"
+    # action = "{\n  \"cards\": " + str(cards) + ",\n  \"number\": " + str(nums) + ",\n  \"formula\": " + "\"(10 * (8 - 6)) + 8 = 24\"" + "\n}"
+    # print(f"model_response: {model_response}")
+    # print(f"action: {action}")
+    # _, _, _, _, info = env.step(action)
+    # print(f"info: {info}")
+
+
+    def make_env(env_config, language_only=False, seed=42, ood=False):
+        def _init():
+            config_dict = {k: v for k, v in env_config.items() if k != "id" and k != "num_steps" and k != "num_evaluations"}
+            config_dict["language_only"] = language_only
+            config_dict["seed"] = seed
+            config_dict["ood"] = ood
+            return GeneralPointEnv_oneline(**config_dict)
+            # env = GeneralPointEnv_oneline(**vars(env_config), language_only=language_only)
+            # return env
+        return _init
+
+    num_envs = 2
+    env_config = {
+        "treat_face_cards_as_10": True,
+        "target_points": 24,
+        "resolution": 256,
+        "show_eqn": False,
+        "verify_iter": 5,
+        "ood": False,
+    }
+    env_fns = [make_env(env_config, language_only=False, seed=1 + idx) for idx in range(num_envs)]
+    envs = gym.vector.AsyncVectorEnv(env_fns, autoreset_mode=gym.vector.AutoresetMode.NEXT_STEP)
+    obs, info = envs.reset()
+    gt_nums = info['Numbers'][0]
+    gt_cards = info['Plain Cards'][0]
+    print(f"gt_nums: {gt_nums}")
+    print(f"gt_cards: {gt_cards}")
+    formula = info['Solution'][0][0]
+    action = "{\n  \"cards\": " + str(gt_cards) + ",\n  \"number\": " + str(gt_nums) + ",\n  \"formula\": " + "\"" + formula + "\"" + "\n}"
+    actions = [action, "None"]
+    obs, reward, terminated, truncated, info = envs.step(actions)
+    print(f"reward: {reward}")
+    print(f"terminated: {terminated}")
+    print(f"truncated: {truncated}")
     print(f"info: {info}")
+    import pdb; pdb.set_trace()
