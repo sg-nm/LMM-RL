@@ -411,12 +411,12 @@ class PPOTrainer(ABC):
 
 
     
-    def training_step(self, experience: Experience, global_steps) -> Dict[str, float]:
+    def training_step(self, experience: Union[Experience, Experience_CARDGAME], global_steps) -> Dict[str, float]:
         status = {}
         if global_steps > self.freezing_actor_steps:
             status = self.training_step_actor(experience)
-        if self.critic is not None:
-            status.update(self.training_step_critic(experience))
+        # if self.critic is not None:
+        #     status.update(self.training_step_critic(experience))
         return status
 
     def training_step_actor(self, experience: Union[Experience, Experience_CARDGAME]) -> Dict[str, float]:

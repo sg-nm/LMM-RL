@@ -98,13 +98,12 @@ class CriticPPOTrainer_CARD(PPOTrainer):
             #     desc=f"Train epoch [{epoch + 1}/{self.max_epochs}]",
             #     disable=not self.strategy.is_rank_0(),
             # )
+            print(f"Critic Train epoch [{epoch + 1}/{self.max_epochs}]...")
             for experience in dataloader:
                 experience.to_device(device)
                 status = self.training_step(experience)
-
                 # for DP
                 status = self.strategy.all_reduce(status)
-
                 status_list.append(status)
                 # pbar.set_postfix(status)
 

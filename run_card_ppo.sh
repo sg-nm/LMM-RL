@@ -75,7 +75,7 @@ ray job submit --address="http://127.0.0.1:8265" \
    --vllm_enable_sleep \
    --enforce_eager \
    --gamma 1.0 \
-   --seed 32 \
+   --seed 128 \
    --use_kl_loss \
    --eval \
    --normalize_advantages \
