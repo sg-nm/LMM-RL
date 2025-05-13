@@ -12,9 +12,9 @@ set -x
 
 # TextGrad + reinforce on Card Game
 
-export ACTOR_NUM_GPUS=4
+export ACTOR_NUM_GPUS=8
 export BATCH_SIZE_PER_GPU=8
-export GRAD_ACCUM_STEPS=4
+export GRAD_ACCUM_STEPS=2
 export GLOBAL_BATCH_SIZE=$((ACTOR_NUM_GPUS * BATCH_SIZE_PER_GPU * GRAD_ACCUM_STEPS))
 # export GLOBAL_BATCH_SIZE=$((ACTOR_NUM_GPUS * BATCH_SIZE_PER_GPU))
 
@@ -34,8 +34,7 @@ ray job submit --address="http://127.0.0.1:8265" \
    --vllm_num_engines $ACTOR_NUM_GPUS \
    --vllm_tensor_parallel_size 1 \
    --critic_num_nodes 1 \
-   --critic_num_gpus_per_node 4 \
-   --colocate_all_models \
+   --critic_num_gpus_per_node $ACTOR_NUM_GPUS \
    --vllm_sync_backend nccl \
    --vllm_gpu_memory_utilization 0.5 \
    --pretrain Qwen/Qwen2.5-7B-Instruct \
@@ -71,20 +70,22 @@ ray job submit --address="http://127.0.0.1:8265" \
    --kl_estimator k3 \
    --log \
    --output_log_dir /home/msuganuma_sakana_ai/src/lmm-r1/openrlhf/textgrad/logs \
+   --colocate_all_models \
    --colocate_actor_vllm \
+   --colocate_actor_ref \
    --vllm_enable_sleep \
    --enforce_eager \
    --gamma 1.0 \
-   --seed 128 \
+   --seed 32 \
    --use_kl_loss \
    --eval \
    --normalize_advantages \
+   # --colocate_all_models \
    # --no_verification \
    # --multimodal \
    # --deepspeed_enable_sleep \
    # --eval \
    # --freeze_vision_encoder \
-   # --colocate_all_models \
    # --enforce_eager \
    # --vllm_enable_sleep \
    # --deepspeed_enable_sleep \

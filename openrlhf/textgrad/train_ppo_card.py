@@ -110,6 +110,9 @@ def train(args):
         num_gpus_per_actor=0.2 if pg else 1,
     )
 
+    if not args.colocate_actor_ref and not args.colocate_all_models:
+        pg = None
+
     if args.init_kl_coef == 0:
         ref_model = None
     else:
@@ -488,7 +491,7 @@ if __name__ == "__main__":
         assert args.vllm_num_engines > 0, "Only support `--packing_samples` with vLLM."
         assert not args.pretrain_data, "`--pretrain_data` is not supported with `--packing_samples` yet."
 
-    if args.vllm_enable_sleep and not args.colocate_all_models:
+    if args.vllm_enable_sleep and (not args.colocate_all_models and not args.colocate_actor_vllm):
         print("Set args.vllm_enable_sleep to False when args.colocate_all_models is disabled.")
         args.vllm_enable_sleep = False
 

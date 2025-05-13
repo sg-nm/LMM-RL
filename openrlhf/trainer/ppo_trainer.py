@@ -306,7 +306,7 @@ class PPOTrainer(ABC):
         status_mean = {}
         for epoch in range(self.max_epochs):
             if self.strategy.is_rank_0():
-                print(f"PPO Train epoch [{epoch + 1}/{self.max_epochs}]...")
+                print(f"PPO Train epoch [{epoch + 1}/{self.max_epochs}] with {len(dataloader)} experiences...")
             # pbar = tqdm(dataloader, desc=f"PPO Train epoch [{epoch + 1}/{self.max_epochs}]", disable=not self.strategy.is_rank_0())
             for experience in dataloader:
                 experience.to_device(device)
@@ -415,8 +415,9 @@ class PPOTrainer(ABC):
         status = {}
         if global_steps > self.freezing_actor_steps:
             status = self.training_step_actor(experience)
-        # if self.critic is not None:
-        #     status.update(self.training_step_critic(experience))
+        if self.critic is not None:
+            print("Training critic in PPO trainer...")
+            status.update(self.training_step_critic(experience))
         return status
 
     def training_step_actor(self, experience: Union[Experience, Experience_CARDGAME]) -> Dict[str, float]:
