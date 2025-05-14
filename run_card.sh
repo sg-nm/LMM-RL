@@ -77,9 +77,9 @@ ray job submit --address="http://127.0.0.1:8265" \
    --seed 128 \
    --use_reward_diff \
    --eval \
-   --reasoning_logprob_weight 1.0 \
-   --delta_coef 1.0 \
-   --reward_coef 0.0 \
+   --reasoning_logprob_weight 3.0 \
+   --delta_coef 0.9 \
+   --reward_coef 0.1 \
    # --distillation \
    # --distillation_coef 0.5 \
    # --multimodal \

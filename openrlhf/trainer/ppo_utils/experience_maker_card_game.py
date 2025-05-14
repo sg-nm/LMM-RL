@@ -585,11 +585,11 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             reward_diff = torch.zeros_like(rewards_tensor, dtype=torch.float32)
             for i in range(self.num_envs):
                 if len(previous_rewards[i]) > 0:
-                    # reward_diff[i] = rewards[i] - previous_rewards[i][-1] # until 0508
-                    if previous_rewards[i][-1] != 0:
-                        reward_diff[i] = (rewards[i] - previous_rewards[i][-1]) / math.fabs(previous_rewards[i][-1])
-                    else:
-                        reward_diff[i] = rewards[i] - previous_rewards[i][-1]
+                    reward_diff[i] = rewards[i] - previous_rewards[i][-1] # until 0508
+                    # if previous_rewards[i][-1] != 0:
+                    #     reward_diff[i] = (rewards[i] - previous_rewards[i][-1]) / math.fabs(previous_rewards[i][-1])
+                    # else:
+                    #     reward_diff[i] = rewards[i] - previous_rewards[i][-1]
                 else:
                     reward_diff[i] = rewards[i]
             mini_batch.reward_diff = reward_diff
@@ -1002,19 +1002,19 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             base_action_log_probs_ref = ray.put([None] * len(seq_chunk_cpu_list))
         
         
-        # values
-        if self.critic is not None:
-            value_ref = self.critic.forward_batch.remote(
-                sequences=seq_chunk_cpu_list,
-                action_mask=action_mask_chunk_cpu_list,
-                attention_mask=attn_chunk_cpu_list,
-            )
-            # avoid CUDA OOM when colocate models
-            if args.colocate_critic_reward or args.colocate_all_models:
-                ray.get([value_ref])
-                ray.get([self.critic.empty_cache.remote()])
-        else:
-            value_ref = ray.put([None] * len(seq_chunk_cpu_list))
+        # # values
+        # if self.critic is not None:
+        #     value_ref = self.critic.forward_batch.remote(
+        #         sequences=seq_chunk_cpu_list,
+        #         action_mask=action_mask_chunk_cpu_list,
+        #         attention_mask=attn_chunk_cpu_list,
+        #     )
+        #     # avoid CUDA OOM when colocate models
+        #     if args.colocate_critic_reward or args.colocate_all_models:
+        #         ray.get([value_ref])
+        #         ray.get([self.critic.empty_cache.remote()])
+        # else:
+        #     value_ref = ray.put([None] * len(seq_chunk_cpu_list))
         
         
         # Initialize lists to store results
@@ -1052,11 +1052,11 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             base_action_log_probs_list = [base_action_log_probs_list[i].to(device) for i in range(len(base_action_log_probs_list))]
         base_action_log_probs = torch.cat(base_action_log_probs_list, dim=0)
         
-        # values
-        values_list = ray.get([value_ref])[0]
-        if values_list[0] is not None:
-            values_list = [values_list[i].to(device) for i in range(len(values_list))]
-        values = torch.cat(values_list, dim=0)
+        # # values
+        # values_list = ray.get([value_ref])[0]
+        # if values_list[0] is not None:
+        #     values_list = [values_list[i].to(device) for i in range(len(values_list))]
+        # values = torch.cat(values_list, dim=0)
         
         # # Concatenate results
         action_log_probs = torch.cat(all_action_log_probs, dim=0)
@@ -1100,7 +1100,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
                     packed_seq_lens=packed_seq_lens,
                     ring_attn_group=self.strategy.ring_attn_group,
                     action_log_probs=action_log_probs,
-                    values=values,
+                    values=None,
                     kl=kl,
                 )
             # Convert tensor into list of tensors for easier manipulation within dataset
@@ -1133,7 +1133,7 @@ class RemoteExperienceMaker_CardGame(NaiveExperienceMaker):
             sequences,
             action_log_probs,
             base_action_log_probs,
-            values=values,
+            values=None,
             returns=mini_batch.returns,
             advantages=mini_batch.returns,
             attention_mask=attention_mask,
