@@ -2201,9 +2201,9 @@ class RemoteExperienceMaker_CardGame_REINFORCE(NaiveExperienceMaker):
                 contents_no_verification.append(feedback_prompt)
                 # contents_no_verification.append(task_prompts[i])
                 for idx, (prev_response, prev_verify_info) in enumerate(zip(previous_responses[i][-self.history_length:], previous_verify_infos[i][-self.history_length:])):
-                    contents.append(f"\n## Previous your answer ({self.history_length - idx} steps ago):\n{prev_response}")
+                    contents.append(f"\n## Your previous answer ({self.history_length - idx} steps ago):\n{prev_response}")
                     contents.append(f"\n## Verification message\nYou failed this trial because {prev_verify_info}")
-                    contents_no_verification.append(f"\n## Previous your answer ({self.history_length - idx} steps ago):\n{prev_response}")
+                    contents_no_verification.append(f"\n## Your previous answer ({self.history_length - idx} steps ago):\n{prev_response}")
             
             else:
                 contents.append(task_prompts[i])
@@ -2313,7 +2313,7 @@ class RemoteExperienceMaker_CardGame_REINFORCE(NaiveExperienceMaker):
                 if len(previous_rewards[i]) > 0:
                     reward_diff[i] = rewards[i] - previous_rewards[i][-1]
                 else:
-                    reward_diff[i] = 0.0
+                    reward_diff[i] = rewards[i]
             mini_batch.reward_diff = reward_diff
             replay_buffer.append(copy.deepcopy(mini_batch))
             
@@ -2754,7 +2754,7 @@ class RemoteExperienceMaker_CardGame_REINFORCE(NaiveExperienceMaker):
             sequences_for_KL=mini_batch.sequences_for_KL if self.distillation else None,
             attention_mask_for_KL=mini_batch.attention_mask_for_KL if self.distillation else None,
             action_mask_for_KL=mini_batch.action_mask_for_KL if self.distillation else None,
-            reward_diff=mini_batch.reward_diff if self.distillation else None,
+            reward_diff=mini_batch.reward_diff,
         )
 
         self.actor.train()  # Reset model state
@@ -3150,7 +3150,6 @@ class RemoteExperienceMaker_CardGame_REINFORCE(NaiveExperienceMaker):
 
         batch_size = (len(messages) + len(llms) - 1) // len(llms)
 
-        
         try:
             refs = []
             prompts = []
@@ -3162,6 +3161,12 @@ class RemoteExperienceMaker_CardGame_REINFORCE(NaiveExperienceMaker):
                 refs.append(llm.add_requests.remote(rank, sampling_params=sampling_params, vllm_vision_input=prompt))
 
             ray.get(refs)
+
+            # Make sure all requests are sent.
+            if self.strategy.ring_attn_group is None:
+                torch.distributed.barrier()
+            else:
+                time.sleep(3)
 
             # Retrieve and combine results from all outputs
             all_output_refs = []

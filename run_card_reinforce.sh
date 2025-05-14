@@ -45,7 +45,7 @@ ray job submit --address="http://127.0.0.1:8265" \
    --grad_accum_steps $GRAD_ACCUM_STEPS \
    --n_samples_per_prompt 1 \
    --max_epochs 2 \
-   --prompt_max_len 3600 \
+   --prompt_max_len 4200 \
    --max_samples 100000 \
    --generate_max_len 512 \
    --advantage_estimator reinforce \
@@ -61,21 +61,22 @@ ray job submit --address="http://127.0.0.1:8265" \
    --flash_attn \
    --l2 0.001 \
    --enable_prefix_caching \
-   --env_config /home/msuganuma_sakana_ai/src/lmm-r1/card_env/gym_cards/configs/card_24.yaml \
+   --env_config /home/suganuma/src/lmm-r1_L/LMM-RL/card_env/gym_cards/configs/card_24.yaml \
    --eps_clip 0.2 \
    --init_kl_coef 5e-2 \
    --adam_offload \
    --use_kl_loss \
    --kl_estimator k3 \
    --log \
-   --output_log_dir /home/msuganuma_sakana_ai/src/lmm-r1/openrlhf/textgrad/logs \
+   --output_log_dir /home/suganuma/src/lmm-r1_L/LMM-RL/openrlhf/textgrad/logs \
    --colocate_actor_vllm \
    --vllm_enable_sleep \
    --enforce_eager \
    --eval \
    --gamma 1.0 \
-   --no_verification \
-   --seed 66 \
+   --seed 99 \
+   --use_reward_diff \
+   # --no_verification \
    # --multimodal \
    # --deepspeed_enable_sleep \
    # --eval \

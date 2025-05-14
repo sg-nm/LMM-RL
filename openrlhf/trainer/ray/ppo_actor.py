@@ -2573,7 +2573,6 @@ class ActorPPOTrainer_CardGame(PPOTrainer):
                         torch.distributed.barrier()
                     else:
                         time.sleep(2)
-
                     all_output_refs = []
                     for i, llm in enumerate(llms):
                         all_output_refs.append(llm.get_responses.remote(rank))

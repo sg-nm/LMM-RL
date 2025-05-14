@@ -11,7 +11,7 @@ from transformers import AutoProcessor
 
 from openrlhf.models import get_llm_for_sequence_regression
 from openrlhf.trainer import PPOTrainer
-from openrlhf.trainer.ppo_utils import Experience
+from openrlhf.trainer.ppo_utils import Experience, Experience_CARDGAME
 from openrlhf.models.lmm_kits.utils import get_data_processor
 from openrlhf.utils.deepspeed import DeepspeedStrategy
 from openrlhf.utils.deepspeed.deepspeed_utils import offload_deepspeed_states, reload_deepspeed_states
