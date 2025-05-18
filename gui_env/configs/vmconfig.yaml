@@ -1,0 +1,22 @@
+num_envs: 4
+docker_image_name: "myrepo/ubuntu2004-pptx-150drills_v3:latest"
+host_task_dir: "/home/suganuma/src/lmm-r1_L/LMM-RL-GUI/drills_vm/"
+task_configs_file: "/home/suganuma/src/lmm-r1_L/LMM-RL-GUI/drills_vm/drills_odp.json"
+cache_dir: "/home/suganuma/src/lmm-r1_L/LMM-RL-GUI/gui_env/cache"
+
+max_tokens: 1024
+top_p: 0.9
+top_k: 1.0
+temperature: 1.0
+action_space: "pyautogui"
+observation_type: "screenshot"
+max_trajectory_length: 2
+a11y_tree_max_tokens: 10000
+max_steps: 25
+history_n: 2
+screen_height: 1080
+screen_width: 1920
+bin_nums: 1000
+max_pixels: 1058400
+min_pixels: 78400
+result_dir: "/home/suganuma/src/lmm-r1_L/LMM-RL-GUI/gui_agent/results"

@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 from peft import LoraConfig, TaskType, get_peft_model
 from peft.tuners.lora import LoraLayer
-from transformers import BitsAndBytesConfig, AutoModelForCausalLM, Qwen2_5_VLForConditionalGeneration, Qwen2_5_VLConfig, Qwen2ForCausalLM
+from transformers import BitsAndBytesConfig, AutoModelForCausalLM, Qwen2_5_VLForConditionalGeneration, Qwen2_5_VLConfig, Qwen2ForCausalLM, Qwen2VLForConditionalGeneration
 from transformers.integrations.deepspeed import HfDeepSpeedConfig
 from flash_attn.utils.distributed import all_gather
 
@@ -400,15 +400,28 @@ class MultiModalActor(nn.Module):
             else:
                 config = None
 
-            self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-                pretrain_or_model,
-                config=config,
-                trust_remote_code=False,
-                attn_implementation=attn_implementation,
-                quantization_config=nf4_config,
-                torch_dtype=torch.bfloat16 if bf16 else "auto",
-                device_map=device_map,
-            )
+            if "Qwen/Qwen2.5-VL" in pretrain_or_model:
+                self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                    pretrain_or_model,
+                    config=config,
+                    trust_remote_code=False,
+                    attn_implementation=attn_implementation,
+                    quantization_config=nf4_config,
+                    torch_dtype=torch.bfloat16 if bf16 else "auto",
+                    device_map=device_map,
+                )
+            elif "UI-TARS" in pretrain_or_model:
+                self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+                    pretrain_or_model,
+                    config=config,
+                    trust_remote_code=False,
+                    attn_implementation=attn_implementation,
+                    quantization_config=nf4_config,
+                    torch_dtype=torch.bfloat16 if bf16 else "auto",
+                    device_map=device_map,
+                )
+            else:
+                raise ValueError(f"Model {pretrain_or_model} not supported")
 
             # LoRA
             if lora_rank > 0:

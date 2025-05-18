@@ -159,3 +159,16 @@ latex2sympy/*
 openrlhf/textgrad/logs/*
 
 openrlhf/textgrad/checkpoint/*
+
+*.jpg
+*.png
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+*.ico
+*.tar
+*.odp
+/docs/*.jpg
+/docs/*.png
+/docs/*.jpeg

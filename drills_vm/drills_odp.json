@@ -1,0 +1,1699 @@
+[
+    {
+        "drill_id": 37,
+        "instruction": "On Slide 7 (Our Partners), replace the generic 'Partner A' and 'Partner B' bullet points with a specific list of technology partners: 'Microsoft Cloud Solutions', 'Cisco Networking', 'IBM Security Services', and 'Oracle Database Systems'.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_37.py",
+        "slide": "./IT_consultant/drills/slide/drill_37.pptx",
+        "action_reference": [
+            "Go to Slide 7 (Our Partners).",
+            "Click inside the text box containing the partner bullet points.",
+            "Select and delete 'Partner A' and type 'Microsoft Cloud Solutions'.",
+            "Press **Enter** to move to the next bullet point.",
+            "Select and delete 'Partner B' and type 'Cisco Networking'.",
+            "Press **Enter** to create a new bullet point, then type 'IBM Security Services'.",
+            "Press **Enter** again to create a fourth bullet point, then type 'Oracle Database Systems'."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_37.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 50,
+        "instruction": "On Slide 3 (Proposed Method), change the border style of both circle shapes to a dashed line to indicate they represent abstract components.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_50.py",
+        "slide": "./ML_researcher/drills/slide/drill_50.pptx",
+        "action_reference": [
+            "Select the first circle shape on Slide 3.",
+            "On the Line and Filling toolbar, click the **Line Style** dropdown. Choose a dashed line style from the list.",
+            "Repeat for the second circle shape to make both have dashed borders."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_50.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 44,
+        "instruction": "On Slide 5 (Experimental settings), add a sigma (\u03a3) symbol after the text \"Learning rate\" in the table to indicate summation of gradients.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_44.py",
+        "slide": "./ML_researcher/drills/slide/drill_44.pptx",
+        "action_reference": [
+            "Click to place the cursor after \"Learning rate\" in the table on Slide 5.",
+            "Go to **Insert > Special Character**. In the Special Characters dialog, search for or locate the sigma symbol (\u03a3) and select it.",
+            "Click **OK** to insert the symbol after \"Learning rate\"."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_44.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 5,
+        "instruction": "Use the Slide Sorter view to reorganize the presentation so that the \"Results\" slide (Slide 6) becomes the new Slide 5, placing it immediately after the \"Datasets\" slide.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_5.py",
+        "slide": "./ML_researcher/drills/slide/drill_5.pptx",
+        "action_reference": [
+            "Click the **Slide Sorter** view tab to switch to Slide Sorter view.",
+            "In Slide Sorter view, click and drag the \"Results\" slide thumbnail (Slide 6) to position it after Slide 4 (\"Datasets\").",
+            "Release the mouse button to drop the slide. The slide order updates according to the new arrangement."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_5.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 7,
+        "instruction": "Add slide numbers to all slides in the Machine Learning Research Presentation to help with navigation during the talk.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_7.py",
+        "slide": "./ML_researcher/drills/slide/drill_7.pptx",
+        "action_reference": [
+            "Go to **Insert > Header and Footer** on the Menu bar to open the Header and Footer dialog.",
+            "Select the **Slide number** option.",
+            "Click **Apply to All** to insert slide numbers on all slides of the presentation."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_7.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 67,
+        "instruction": "Use the Outline view to draft a new section for the presentation about future services. Add a new slide title 'Future Services' after slide 7 (Our Partners), then add three bullet points: 'AI Integration', 'Quantum Computing Solutions', and 'Blockchain Security Services'.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_67.py",
+        "slide": "./IT_consultant/drills/slide/drill_67.pptx",
+        "action_reference": [
+            "Go to **View > Outline** on the menu bar to switch to Outline view.",
+            "Find the entry for slide 7 (Our Partners) in the outline.",
+            "Click at the end of this entry and press **Enter** to create a new outline item.",
+            "Type 'Future Services' as the new slide title.",
+            "Press **Enter** again, then press **Tab** to indent and create a bullet point.",
+            "Type 'AI Integration' for the first bullet point.",
+            "Press **Enter** to create another bullet at the same level and type 'Quantum Computing Solutions'.",
+            "Press **Enter** again and type 'Blockchain Security Services' for the third bullet point."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_67.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 54,
+        "instruction": "On Slide 5 (Experimental settings), increase the width of the first column in the hyperparameters table by 1 cm to better accommodate the parameter names.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_54.py",
+        "slide": "./ML_researcher/drills/slide/drill_54.pptx",
+        "action_reference": [
+            "Hover your mouse pointer over the border line between the first and second columns. The cursor will change to a double-sided arrow.",
+            "Click and drag the column border to the right to increase the first column's width by approximately 1 cm. Release the mouse when the column reaches the desired width."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_54.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 62,
+        "instruction": "On slide 5 (Main Competitors), delete the 'Company B' column from the comparison table, as this competitor is no longer in the market.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_62.py",
+        "slide": "./IT_consultant/drills/slide/drill_62.pptx",
+        "action_reference": [
+            "Go to slide 5 titled 'Main Competitors'.",
+            "Click inside any cell of the 'Company B' column (the rightmost column).",
+            "Go to **Table > Delete > Columns** on the menu bar.",
+            "The 'Company B' column is removed from the table, and the table adjusts accordingly."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_62.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 77,
+        "instruction": "On slide 5 of the ML presentation, insert a 2x3 table to replace the existing hyperparameter table. Keep the headers 'Hyperparameter' and 'Value' but add a new row for 'Batch size' with the value '32'. Ensure the table is wide enough to accommodate all content clearly.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_77.py",
+        "slide": "./ML_researcher/drills/slide/drill_77.pptx",
+        "action_reference": [
+            "Go to slide 5 (Experimental settings).",
+            "Click on the existing hyperparameter table to select it, then press Delete to remove it.",
+            "Go to **Insert > Table** on the Menu bar to open the Insert Table dialog.",
+            "Enter **2** for the number of columns and **3** for the number of rows.",
+            "Click **OK** to insert the table on the slide.",
+            "Click in the first cell of the first row and type 'Hyperparameter', then tab to the next cell and type 'Value'.",
+            "In the first cell of the second row, type 'Epochs', then tab to the next cell and type '100'.",
+            "In the first cell of the third row, type 'Learning rate', then tab to the next cell and type '1e-4'.",
+            "In the first cell of the fourth row, type 'Batch size', then tab to the next cell and type '32'.",
+            "With the table still selected, drag the handles to adjust the width so all content is clearly visible."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_77.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 31,
+        "instruction": "Update the title on Slide 1 from 'Technology Consulting' to 'TechSolve IT Consulting' to incorporate the company name into the presentation title.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_31.py",
+        "slide": "./IT_consultant/drills/slide/drill_31.pptx",
+        "action_reference": [
+            "Click on Slide 1 to select it in the Workspace.",
+            "Click in the **Title** placeholder on the slide (the text that currently says 'Technology Consulting').",
+            "Select and delete the existing text.",
+            "Type 'TechSolve IT Consulting'. The text will appear in the title placeholder with the default title style.",
+            "Click outside the text box to confirm the changes."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_31.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 52,
+        "instruction": "On Slide 4 (Our Solutions), use the drawing tools to create a simple network diagram in the empty space below solution 3. Draw three computer icons (using rectangles with smaller rectangles on top) connected by lines to represent a basic IT network infrastructure.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_52.py",
+        "slide": "./IT_consultant/drills/slide/drill_52.pptx",
+        "action_reference": [
+            "Go to Slide 4 (Our Solutions).",
+            "On the Drawing toolbar, select the **Rectangle** tool.",
+            "Draw a small rectangle in the space below solution 3 to represent a computer monitor.",
+            "Draw another smaller rectangle attached to the bottom of the first one to represent a computer base.",
+            "Repeat these steps to create two more computer shapes in different positions.",
+            "Use the **Line** or **Connector** tool to draw lines connecting the three computer shapes.",
+            "Select all the shapes (the computers and connecting lines) and group them together by right-clicking and selecting **Group > Group**.",
+            "If needed, resize or reposition the network diagram to fit properly in the available space.",
+            "The slide now has a simple network diagram illustrating IT infrastructure connections."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_52.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 38,
+        "instruction": "Update the title of Slide 1 from \"Machine Learning Research Presentation\" to \"Accelerating Machine Learning Inference: A Novel Approach\".",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_38.py",
+        "slide": "./ML_researcher/drills/slide/drill_38.pptx",
+        "action_reference": [
+            "Go to Slide 1 that contains the title placeholder (a box saying \"Machine Learning Research Presentation\").",
+            "Click inside the title placeholder. The placeholder text disappears, and a text cursor appears. Delete the existing text and type: \"Accelerating Machine Learning Inference: A Novel Approach\"."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_38.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 47,
+        "instruction": "On Slide 2 (Background), replace the existing neural network image with a more detailed neural network diagram from the file \"nn_detailed.png\" on your desktop.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_47.py",
+        "slide": "./ML_researcher/drills/slide/drill_47.pptx",
+        "action_reference": [
+            "Go to **Insert > Image** on the Menu bar.",
+            "In the file dialog, browse to your desktop and select the \"nn_detailed.png\" file. Click **Open**.",
+            "The new image will appear on the slide. Position it where the old neural network image was located by dragging it into place."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_47.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 21,
+        "instruction": "Draw a horizontal line under the title on slide 3 ('Understanding the Problem') that extends from the left edge to the right edge of the slide using dark blue color (#003366) to visually separate the title from the content.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_21.py",
+        "slide": "./IT_consultant/drills/slide/drill_21.pptx",
+        "action_reference": [
+            "On the Drawing toolbar, click the **Line** tool (a diagonal line icon).",
+            "Click on slide 3 just below the title text, then drag horizontally across the slide to the right edge. Hold **Shift** to keep it perfectly horizontal.",
+            "Release the mouse to draw the line. With the line selected, use the Line and Filling toolbar to set the line color to dark blue (#003366) and increase the line width to 2pt for better visibility."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_21.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 30,
+        "instruction": "Add speaker notes to Slide 3 (Understanding the Problem) with key talking points about common IT infrastructure challenges that clients face, including 'Legacy system integration issues', 'Cloud migration challenges', and 'Cybersecurity vulnerabilities'.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_30.py",
+        "slide": "./IT_consultant/drills/slide/drill_30.pptx",
+        "action_reference": [
+            "Click on Slide 3 (Understanding the Problem) to select it.",
+            "Click the **Notes** view tab at the top of the workspace to switch to Notes view. The selected slide will appear with a notes area below it.",
+            "Click in the notes area and type the following speaker notes: 'Key talking points: 1. Legacy system integration issues - discuss how outdated systems create bottlenecks. 2. Cloud migration challenges - highlight security and downtime concerns. 3. Cybersecurity vulnerabilities - emphasize increasing threat landscape and compliance requirements.'",
+            "These notes will be available during your presentation but won't show on the slides themselves."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_30.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 25,
+        "instruction": "On Slide 2 (\"Background\"), insert the image \"neural_network.jpg\" to replace the existing model illustration with a more detailed visualization of the AI architecture.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_25.py",
+        "slide": "./ML_researcher/drills/slide/drill_25.pptx",
+        "action_reference": [
+            "Navigate to Slide 2 (\"Background\").",
+            "Select and delete the existing model illustration if needed.",
+            "Go to **Insert > Image** on the Menu bar.",
+            "In the Insert Image dialog, navigate to the folder containing the \"neural_network.jpg\" file, select it, and click **Open**.",
+            "The image is inserted into Slide 2, positioned where the previous illustration was."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_25.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 19,
+        "instruction": "On Slide 4 (\"Datasets\"), add a hyperlink to the text \"Dataset A\" that points to the fictional dataset URL \"https://research-lab.org/datasets/dataset-a\" for attendees to access the data later.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_19.py",
+        "slide": "./ML_researcher/drills/slide/drill_19.pptx",
+        "action_reference": [
+            "Navigate to Slide 4 (\"Datasets\").",
+            "Select the text \"Dataset A\" in the bulleted list.",
+            "Go to **Insert > Hyperlink** to open the Hyperlink dialog.",
+            "In the dialog, type the URL \"https://research-lab.org/datasets/dataset-a\" into the Target box.",
+            "Click **Apply** (or **OK**). The text \"Dataset A\" becomes a clickable hyperlink (usually underlined and colored)."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_19.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 40,
+        "instruction": "On Slide 2 (Background), italicize the word \"slow\" in the text \"But very slow inference...\".",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_40.py",
+        "slide": "./ML_researcher/drills/slide/drill_40.pptx",
+        "action_reference": [
+            "On Slide 2, select the word \"slow\" in the text \"But very slow inference...\".",
+            "Click the **Italic (I)** button on the Text Formatting toolbar. The selected word will appear in italics."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_40.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 74,
+        "instruction": "Open the Navigator and rename the model illustration image on Slide 2 from its default name to 'NeuralNetworkDiagram' for easier identification.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_74.py",
+        "slide": "./ML_researcher/drills/slide/drill_74.pptx",
+        "action_reference": [
+            "Press F5 or go to View > Navigator to open the Navigator panel.",
+            "In the Navigator, expand the list for Slide 2 if it's not already expanded.",
+            "Look for the image object (likely named something like 'Bitmap 1' or 'Picture 3').",
+            "Right-click on this image name in the Navigator and choose Rename.",
+            "Type 'NeuralNetworkDiagram' as the new descriptive name.",
+            "Press Enter to confirm the name change.",
+            "The image is now labeled with this descriptive name in the Navigator, making it easier to identify and select when working with multiple objects.",
+            "You can close the Navigator or leave it open for further slide organization."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_74.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 1,
+        "instruction": "Reorder the slides by moving slide 5 ('Main Competitors') to appear after slide 3 ('Understanding the Problem') to improve the presentation flow.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_1.py",
+        "slide": "./IT_consultant/drills/slide/drill_1.pptx",
+        "action_reference": [
+            "In the Slides pane, click and hold the slide thumbnail for slide 5 ('Main Competitors').",
+            "Drag the thumbnail to the desired position between slides 3 and 4 (a black line indicates where it will drop) and release the mouse button to place the slide."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_1.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 28,
+        "instruction": "On Slide 5 (\"Experimental Settings\"), insert a 3\u00d74 table below the existing hyperparameters table to include additional model configuration parameters.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_28.py",
+        "slide": "./ML_researcher/drills/slide/drill_28.pptx",
+        "action_reference": [
+            "Go to Slide 5 (\"Experimental Settings\").",
+            "Click below the existing hyperparameters table to position the cursor.",
+            "Go to **Insert > Table** on the Menu bar.",
+            "In the Insert Table dialog, set 3 columns and 4 rows.",
+            "Click **OK**. A new 3\u00d74 table grid is inserted onto the slide below the existing table.",
+            "If needed, resize the table by dragging its handles so it's properly positioned on the slide."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_28.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 68,
+        "instruction": "On slide 3 (Understanding the Problem), change the level of the text 'Problem 1' to create a hierarchical structure. Make 'Problem 1' a main point and add a new sub-point underneath it that reads 'Legacy System Integration Issues'.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_68.py",
+        "slide": "./IT_consultant/drills/slide/drill_68.pptx",
+        "action_reference": [
+            "Go to slide 3 titled 'Understanding the Problem'.",
+            "Switch to **Outline** view (View > Outline).",
+            "Find the entry for 'Problem 1' in the outline view.",
+            "If 'Problem 1' is already at the top level, press **Enter** after it to create a new line.",
+            "Press **Tab** to demote the new line (make it a sub-point).",
+            "Type 'Legacy System Integration Issues' as the content for this sub-point.",
+            "Switch back to Normal view (View > Normal) to see the changes on the slide."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_68.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 24,
+        "instruction": "On Slide 6 (\"Results\"), resize the chart to exact dimensions of 15 cm width by 10 cm height to ensure it's large enough to be readable during the presentation.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_24.py",
+        "slide": "./ML_researcher/drills/slide/drill_24.pptx",
+        "action_reference": [
+            "Go to Slide 6 (\"Results\").",
+            "Select the chart so that it shows selection handles.",
+            "Press **F4** or go to **Format > Object and Shape > Position and Size** to open the Position and Size dialog.",
+            "On the **Position and Size** tab, enter the exact Width (15 cm) and Height (10 cm).",
+            "Click **OK**. The chart will resize to those dimensions."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_24.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 43,
+        "instruction": "On Slide 6 (Results), change the text \"Performance Comparison\" to uppercase to emphasize this section.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_43.py",
+        "slide": "./ML_researcher/drills/slide/drill_43.pptx",
+        "action_reference": [
+            "Select the text \"Performance Comparison\" on Slide 6.",
+            "Go to **Format > Text > UPPERCASE** on the Menu bar. The selected text is transformed to \"PERFORMANCE COMPARISON\"."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_43.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 76,
+        "instruction": "Apply a different master slide design to Slide 1 of the ML presentation, choosing a design with a gradient background from the available master slides.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_76.py",
+        "slide": "./ML_researcher/drills/slide/drill_76.pptx",
+        "action_reference": [
+            "Go to Slide 1, the title slide.",
+            "In the Sidebar, click on the Master Slides tab to show available master slide designs.",
+            "Scroll through the list of master slide thumbnails to find one with a gradient background.",
+            "Double-click on the master slide design with the gradient background to apply it.",
+            "Slide 1 will update to use the new master slide design: the background will change to a gradient, and the font styles and default placements might also update.",
+            "Check that the title and subtitle text are still properly visible against the new background.",
+            "If needed, adjust the text color or position to ensure good contrast with the new gradient background."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_76.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 72,
+        "instruction": "Start a new IT security presentation using the existing template theme from the current IT consulting presentation. This will ensure consistent branding between the two related presentations.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_72.py",
+        "slide": "./IT_consultant/drills/slide/drill_72.pptx",
+        "action_reference": [
+            "Go to **File > New > Presentation**.",
+            "When the Template Manager or 'Select a Template' dialog appears, click on the **From Template** tab or option.",
+            "Browse to locate the current IT consulting presentation file.",
+            "Select it and click **Open** or **OK**.",
+            "A new presentation is created with the same design template, background, colors, and fonts as the IT consulting presentation.",
+            "Delete any content slides but keep the master slide formatting."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_72.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 48,
+        "instruction": "On Slide 6 (Results), resize the chart to make it 25% larger while maintaining its proportions to improve visibility during the presentation.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_48.py",
+        "slide": "./ML_researcher/drills/slide/drill_48.pptx",
+        "action_reference": [
+            "Click the chart on Slide 6 to select it. Selection handles appear around the chart.",
+            "Click and drag a corner handle outward to enlarge the chart. Hold **Shift** while dragging to maintain the chart's aspect ratio. Make it approximately 25% larger than its current size."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_48.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 75,
+        "instruction": "Use Find & Replace to change all instances of the word 'Problem' to 'Challenge' throughout the IT consulting presentation to frame issues more positively.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_75.py",
+        "slide": "./IT_consultant/drills/slide/drill_75.pptx",
+        "action_reference": [
+            "Press **Ctrl+F** or go to **Edit > Find & Replace** to open the Find & Replace dialog.",
+            "In the **Find** field, type 'Problem'.",
+            "In the **Replace** field, type 'Challenge'.",
+            "Click **Find All** to see all occurrences in the presentation.",
+            "Click **Replace All** to replace every instance of 'Problem' with 'Challenge'.",
+            "A confirmation will show how many replacements were made. Click **OK**.",
+            "Close the dialog and review the slides to ensure the replacements make sense in context, particularly on slide 3 where 'Problem 1', 'Problem 2', and 'Problem 3' should now read 'Challenge 1', 'Challenge 2', and 'Challenge 3'."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_75.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 42,
+        "instruction": "On Slide 4 (Datasets), add \"Custom dataset\" as a sub-point under \"Dataset B\", then promote it back to the same level as Dataset A and B.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_42.py",
+        "slide": "./ML_researcher/drills/slide/drill_42.pptx",
+        "action_reference": [
+            "Click at the end of the \"Dataset B\" line and press Enter to create a new line.",
+            "Type \"Custom dataset\" on the new line and press **Tab** to make it a sub-point of Dataset B.",
+            "With the cursor at the beginning of \"Custom dataset\", press **Shift+Tab** to promote it back to the same level as Dataset A and B."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_42.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 25,
+        "instruction": "Insert a 3\u00d73 table on slide 5 ('Main Competitors') below the existing comparison table to add detailed feature comparisons between the company and its competitors.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_25.py",
+        "slide": "./IT_consultant/drills/slide/drill_25.pptx",
+        "action_reference": [
+            "Select slide 5 ('Main Competitors').",
+            "Go to **Insert > Table** to open the Insert Table dialog.",
+            "Specify 3 **Columns** and 3 **Rows**, then click **OK**. A table with the chosen size is inserted onto the slide below the existing table.",
+            "Click and drag the new table to position it appropriately on the slide."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_25.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 53,
+        "instruction": "On Slide 5 (Experimental settings), center-align all the values in the second column of the hyperparameters table for better visual appearance.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_53.py",
+        "slide": "./ML_researcher/drills/slide/drill_53.pptx",
+        "action_reference": [
+            "Click into any cell in the second column of the table whose text alignment you want to change.",
+            "On the Table toolbar, click the **Center** alignment button. The text in the cells will be centered left-to-right."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_53.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 17,
+        "instruction": "On Slide 2 (\"Background\"), add the chemical formula \"CO\u2082\" with proper subscript formatting to the text to reference carbon emissions related to the AI inference processing.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_17.py",
+        "slide": "./ML_researcher/drills/slide/drill_17.pptx",
+        "action_reference": [
+            "Navigate to Slide 2 (\"Background\").",
+            "Click after the text \"But very slow inference...\" and add a space.",
+            "Type \"Generating high CO2 emissions.\" (or type \"Generating high CO\" and continue to next step).",
+            "Select the \"2\" character in \"CO2\".",
+            "On the Text Formatting toolbar, click the **Subscript** button.",
+            "The \"2\" is now lowered below the line as a subscript in \"CO\u2082\"."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_17.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 73,
+        "instruction": "On Slide 2 of the ML presentation, add a thin red border around the model illustration image to make it stand out from the text.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_73.py",
+        "slide": "./ML_researcher/drills/slide/drill_73.pptx",
+        "action_reference": [
+            "Go to Slide 2 'Background'.",
+            "Select the model illustration image.",
+            "On the Line and Filling toolbar at the top, click the Line Style drop-down and select a continuous line style.",
+            "Set the Line Width to 1pt (or 0.03\") for a thin border.",
+            "Click the Line Color tool and select a red color.",
+            "The image will now have a thin red border around its perimeter.",
+            "This border helps the image stand out from the text content on the slide and gives it a more defined edge.",
+            "Click elsewhere on the slide to deselect the image and see the final result with the new border."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_73.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 82,
+        "instruction": "Rearrange the ML presentation slides to place the 'Datasets' slide (currently slide 4) before the 'Proposed Method' slide (currently slide 3), creating a more logical flow where datasets are introduced before methodology.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_82.py",
+        "slide": "./ML_researcher/drills/slide/drill_82.pptx",
+        "action_reference": [
+            "Click the **Slide Sorter** tab (often at the top of the workspace), or go to **View > Slide Sorter**.",
+            "In Slide Sorter view, you'll see thumbnail images of all slides in the presentation.",
+            "Click on slide 4 (Datasets) and drag it to the left, positioning it between slide 2 (Background) and slide 3 (Proposed Method).",
+            "An insertion line or shadow will appear showing where the slide will be placed.",
+            "Release the mouse button when the insertion line is between slides 2 and 3.",
+            "The Datasets slide will now be the new slide 3, and the Proposed Method slide will become slide 4.",
+            "Verify that the new slide order flows logically: Title (1) \u2192 Background (2) \u2192 Datasets (3) \u2192 Proposed Method (4) \u2192 Experimental settings (5) \u2192 Results (6).",
+            "Return to Normal view by clicking the Normal tab or going to View > Normal."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_82.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 3,
+        "instruction": "Delete the placeholder subtitle text \"Insert subtitle or your name here\" from the title slide (Slide 1) as it's no longer needed.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_3.py",
+        "slide": "./ML_researcher/drills/slide/drill_3.pptx",
+        "action_reference": [
+            "In the Slides pane on the left, click to select Slide 1 (the title slide).",
+            "Click on the subtitle text \"Insert subtitle or your name here\" to select it.",
+            "Press the **Delete** key to remove the selected text box or clear its content."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_3.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 1,
+        "instruction": "Insert a new slide after the \"Datasets\" slide (Slide 4) to explain the data preprocessing steps used in the machine learning research.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_1.py",
+        "slide": "./ML_researcher/drills/slide/drill_1.pptx",
+        "action_reference": [
+            "Navigate to Slide 4 (\"Datasets\") by clicking on its thumbnail in the Slides pane.",
+            "Click the **New Slide** button on the Presentation toolbar.",
+            "A new blank slide (using the default layout) is inserted after the current slide, appearing as Slide 5."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_1.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 71,
+        "instruction": "On Slide 2 of the ML presentation, send the model illustration image to the back so the bullet point text 'AI agents are powerful' appears on top of the image.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_71.py",
+        "slide": "./ML_researcher/drills/slide/drill_71.pptx",
+        "action_reference": [
+            "Go to Slide 2 'Background'.",
+            "Select the model illustration image.",
+            "Right-click the image and choose Arrange > Send to Back from the context menu.",
+            "The image will be placed behind all other objects on the slide, including the text boxes containing the bullet points.",
+            "The text 'AI agents are powerful' will now appear on top of the image instead of being potentially hidden behind it.",
+            "If needed, adjust the position of the image to create a good background for the text that's now in front of it.",
+            "Click elsewhere on the slide to deselect the image and see the final layering result."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_71.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 69,
+        "instruction": "On Slide 2 of the ML presentation, crop the model illustration image to focus on just the center portion showing the neural network structure.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_69.py",
+        "slide": "./ML_researcher/drills/slide/drill_69.pptx",
+        "action_reference": [
+            "Go to Slide 2 'Background'.",
+            "Select the model illustration image.",
+            "Click on the Crop Image icon on the Image toolbar that appears when the image is selected.",
+            "Crop marks will appear around the image edges.",
+            "Drag the left crop mark inward to trim the left side of the image.",
+            "Drag the right crop mark inward to trim the right side.",
+            "Drag the top and bottom crop marks inward as needed to focus on just the neural network structure in the center.",
+            "After adjusting all four sides to frame just the central network structure, click outside the image to apply the crop.",
+            "The image is now cropped to show only the focused center portion with the neural network structure."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_69.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 42,
+        "instruction": "On Slide 1 (Title slide), disable automatic text fitting for the title text box to prevent the title 'TechSolve IT Consulting' from automatically shrinking if more text is added.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_42.py",
+        "slide": "./IT_consultant/drills/slide/drill_42.pptx",
+        "action_reference": [
+            "Go to Slide 1 and right-click on the title text box containing 'TechSolve IT Consulting'.",
+            "Choose **Text Box** (or **Text**) from the context menu.",
+            "In the Text dialog that appears, go to the **Text** tab.",
+            "Uncheck the **Fit to frame** option to disable automatic text resizing.",
+            "Click **OK**. Now if you add more text to the title, it will not automatically shrink to fit the box."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_42.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 36,
+        "instruction": "Change the background color of Slide 1 (Title slide) to a light blue (#E6F2FF) to make it more visually appealing.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_36.py",
+        "slide": "./ML_researcher/drills/slide/drill_36.pptx",
+        "action_reference": [
+            "Select Slide 1 (the title slide). Go to **Slide > Slide Properties** on the Menu bar to open the Slide Properties dialog.",
+            "In the dialog, go to the **Background** tab. Choose a solid color from the dropdown, then click **Color** and select the light blue color (#E6F2FF). Click **OK** to apply the new background color to the slide."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_36.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 20,
+        "instruction": "Insert the company logo image 'techsolve_logo.png' from your Documents folder onto slide 1 in the bottom-right corner to establish brand identity on the title slide.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_20.py",
+        "slide": "./IT_consultant/drills/slide/drill_20.pptx",
+        "action_reference": [
+            "Go to **Insert > Image**. In the file dialog that appears (Figure 98), browse to your Documents folder, find and select the 'techsolve_logo.png' file, and click **Open**.",
+            "The image will be inserted onto slide 1. Click and drag the image to position it in the bottom-right corner of the slide."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_20.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 18,
+        "instruction": "On Slide 6 (\"Results\"), insert the copyright symbol (\u00a9) followed by \"2025 Our Research Lab\" at the bottom of the slide to indicate ownership of the research results.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_18.py",
+        "slide": "./ML_researcher/drills/slide/drill_18.pptx",
+        "action_reference": [
+            "Go to Slide 6 (\"Results\").",
+            "Click on an empty area at the bottom of the slide to position the cursor.",
+            "Go to **Insert > Special Character** to open the Special Characters dialog.",
+            "Find and click the copyright symbol (\u00a9) in the grid, then click **OK**.",
+            "The \u00a9 symbol is inserted. Continue typing \" 2025 Our Research Lab\" after it.",
+            "The complete text \"\u00a9 2025 Our Research Lab\" now appears at the bottom of the slide."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_18.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 12,
+        "instruction": "Change the color of the text 'Problem 1', 'Problem 2', and 'Problem 3' on slide 3 from black to dark blue (#003366) to match the corporate color scheme and improve visual cohesion.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_12.py",
+        "slide": "./IT_consultant/drills/slide/drill_12.pptx",
+        "action_reference": [
+            "Select the text 'Problem 1' on slide 3.",
+            "On the Text Formatting toolbar, click the **Font Color** button (often an 'A' icon) and select dark blue (#003366) from the palette. The selected text will change to that color.",
+            "Repeat for 'Problem 2' and 'Problem 3' text to ensure all three headings match."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_12.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 79,
+        "instruction": "On slide 2 of the ML presentation, add a 2-pixel thick dark blue border around the neural network model illustration to make it stand out more clearly against the white background.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_79.py",
+        "slide": "./ML_researcher/drills/slide/drill_79.pptx",
+        "action_reference": [
+            "Go to slide 2 (Background).",
+            "Click on the neural network model illustration to select it.",
+            "Look for the **Line and Filling** toolbar at the top, or right-click the image and choose **Line** from the context menu.",
+            "From the Line Style options, select a continuous line style.",
+            "Set the Line Width to 2pt (or 0.07\" depending on the measurement units used).",
+            "From the Line Color dropdown, select a dark blue color.",
+            "If using the Line dialog, click **OK** to apply the changes.",
+            "The neural network image now has a 2-pixel thick dark blue border around it.",
+            "The border helps the image stand out more clearly against the white slide background.",
+            "Check that the border appears even on all sides and that the image still looks professionally presented."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_79.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 64,
+        "instruction": "On slide 6, resize the bar chart to make it 25% larger while maintaining its aspect ratio.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_64.py",
+        "slide": "./IT_consultant/drills/slide/drill_64.pptx",
+        "action_reference": [
+            "Go to slide 6 (the slide with the bar chart).",
+            "Click on the chart to select it (selection handles will appear).",
+            "To maintain proportions, click and drag one of the corner handles of the chart's bounding box. Drag outward to enlarge the chart by approximately 25%.",
+            "Release the mouse button when the chart reaches the desired size.",
+            "If needed, reposition the chart to ensure it's properly placed on the slide."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_64.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 37,
+        "instruction": "Add speaker notes to Slide 6 (Results) with the text \"Emphasize that our method shows 15% improvement on Dataset A and 25% improvement on Dataset B compared to the baseline.\"",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_37.py",
+        "slide": "./ML_researcher/drills/slide/drill_37.pptx",
+        "action_reference": [
+            "Click the **Notes** view tab at the top of the Workspace to switch to Notes view for Slide 6 (Results).",
+            "Click into the text area below the slide (labeled \"Click to add notes\") and type: \"Emphasize that our method shows 15% improvement on Dataset A and 25% improvement on Dataset B compared to the baseline.\" Switch back to **Normal** view when done."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_37.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 57,
+        "instruction": "On Slide 7 (Our Partners), insert a QR code that links to 'www.techsolve-consulting.com' in the bottom right corner of the slide. Use the QR Code Generator extension if installed, or alternatively, create a placeholder rectangle of 3cm x 3cm with text indicating 'QR Code Here'.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_57.py",
+        "slide": "./IT_consultant/drills/slide/drill_57.pptx",
+        "action_reference": [
+            "Go to Slide 7 (Our Partners).",
+            "If the QR Code Generator extension is installed in LibreOffice: Go to **Insert > Object > QR Code** (or similar path depending on how the extension is integrated).",
+            "In the QR Code generator, enter 'www.techsolve-consulting.com' as the URL to encode.",
+            "Set the size to approximately 3cm x 3cm and generate the QR code.",
+            "If the extension is not available: Use the Rectangle tool to draw a 3cm x 3cm square in the bottom right corner.",
+            "Right-click the rectangle, select **Line** and set **Line Style** to 'Continuous' and **Line Width** to a visible value.",
+            "Add a text box on top of the rectangle with the text 'QR Code Here: www.techsolve-consulting.com'.",
+            "Position the QR code or placeholder in the bottom right corner of the slide."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_57.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 26,
+        "instruction": "On Slide 2 (\"Background\"), resize the neural network image to 10 cm width while maintaining its aspect ratio, positioning it on the right side of the slide.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_26.py",
+        "slide": "./ML_researcher/drills/slide/drill_26.pptx",
+        "action_reference": [
+            "Click on the neural network image on Slide 2 to select it.",
+            "Click and drag one of the corner handles while holding Shift to resize the image proportionally.",
+            "To set exact dimensions, press F4 to open the Position and Size dialog, set Width to 10 cm, and check \"Keep ratio\" if available.",
+            "Click OK to apply the size change, then drag the image to position it on the right side of the slide."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_26.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 52,
+        "instruction": "On Slide 3 (Proposed Method), add the labels \"Encoder\" and \"Decoder\" inside the two circle shapes respectively.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_52.py",
+        "slide": "./ML_researcher/drills/slide/drill_52.pptx",
+        "action_reference": [
+            "Double-click the left circle shape on Slide 3.",
+            "A text cursor appears inside the shape. Type \"Encoder\".",
+            "Double-click the right circle shape and type \"Decoder\" inside it."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_52.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 30,
+        "instruction": "On Slide 6 (\"Results\"), edit the data in the existing bar chart to add a third data series called \"Competitor\" with values of 70 for Dataset A and 50 for Dataset B.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_30.py",
+        "slide": "./ML_researcher/drills/slide/drill_30.pptx",
+        "action_reference": [
+            "Double-click the bar chart on Slide 6 to enter edit mode.",
+            "Right-click the chart and select **Data Table** (or go to **View > Data Table**). The Chart Data Table dialog opens.",
+            "In the data table, click the **Add Series** button. A new empty series (new column) will appear in the data table.",
+            "Enter \"Competitor\" as the label for this series, then enter 70 for Dataset A and 50 for Dataset B.",
+            "Close the data table dialog. The chart now includes the third data series (\"Competitor\") alongside \"Ours\" and \"Baseline A\"."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_30.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 66,
+        "instruction": "Reorder the slides so that slide 6 (the chart slide) comes before slide 5 (Main Competitors), as the chart data should be presented before the competitor comparison.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_66.py",
+        "slide": "./IT_consultant/drills/slide/drill_66.pptx",
+        "action_reference": [
+            "Go to **View > Slide Sorter** on the menu bar to switch to Slide Sorter view.",
+            "In the Slide Sorter view, locate and click on slide 6 (the chart slide) to select it.",
+            "Drag slide 6 to the left before slide 5 (Main Competitors). A vertical insertion line will appear to indicate the new position.",
+            "Release the mouse button. The slide will drop into the new position as slide 5, and the former slide 5 will become slide 6."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_66.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 40,
+        "instruction": "On Slide 1 (the title slide), add a registered trademark symbol (\u00ae) after 'TechSolve' in the title to properly display the company's trademarked name.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_40.py",
+        "slide": "./IT_consultant/drills/slide/drill_40.pptx",
+        "action_reference": [
+            "Go to Slide 1 and click to place your cursor immediately after the word 'TechSolve' in the title.",
+            "Go to **Insert > Special Character** to open the Special Characters dialog.",
+            "Locate and select the registered trademark symbol (\u00ae) from the grid of characters.",
+            "Click **OK** to insert the symbol into the title.",
+            "The title will now show 'TechSolve\u00ae' with the registered trademark symbol properly displayed."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_40.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 32,
+        "instruction": "On Slide 6 (\"Results\"), hide the legend from the performance comparison chart since the color coding is explained in the bullet points below the chart.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_32.py",
+        "slide": "./ML_researcher/drills/slide/drill_32.pptx",
+        "action_reference": [
+            "Select the chart on Slide 6 (double-click if not already in edit mode).",
+            "On the Sidebar, open the **Properties** deck and find **Chart Elements**.",
+            "Uncheck **Legend** to hide the chart legend.",
+            "The legend (the box with series labels) will disappear from the chart, creating more space for the actual data visualization."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_32.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 24,
+        "instruction": "Set the exact size of each problem box on slide 3 to be 2.5 inches (6.35 cm) wide and 2 inches (5.08 cm) tall to create uniformity and professional appearance.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_24.py",
+        "slide": "./IT_consultant/drills/slide/drill_24.pptx",
+        "action_reference": [
+            "Select the first problem box on slide 3.",
+            "Press **F4** or right-click the object and choose **Position and Size** to open the Position and Size dialog.",
+            "On the **Position and Size** tab, enter '2.5' for **Width** and '2' for **Height** (ensure the measurement units are set to inches). Uncheck 'Keep ratio' if it's checked.",
+            "Click **OK**. The object will resize to the specified dimensions.",
+            "Repeat for the other two problem boxes, ensuring all three have identical dimensions."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_24.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 20,
+        "instruction": "On Slide 6 (\"Results\"), underline the text \"Performance Comparison\" to emphasize this section heading in the presentation.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_20.py",
+        "slide": "./ML_researcher/drills/slide/drill_20.pptx",
+        "action_reference": [
+            "Navigate to Slide 6 (\"Results\").",
+            "Select the text \"Performance Comparison\".",
+            "On the Text Formatting toolbar, click the **Underline** button.",
+            "The selected text now appears with an underline beneath it."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_20.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 66,
+        "instruction": "On Slide 6 of the ML presentation, hide the chart legend since there's only one data series shown in the performance comparison.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_66.py",
+        "slide": "./ML_researcher/drills/slide/drill_66.pptx",
+        "action_reference": [
+            "Go to Slide 6 'Results'.",
+            "Select the chart and double-click to edit it if needed.",
+            "Open the Elements panel on the Sidebar while the chart is selected.",
+            "Find the option for Legend in this panel and uncheck it.",
+            "The legend will disappear from the chart, providing more space for the actual chart data.",
+            "Click outside the chart to finish editing and see the final result without the legend."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_66.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 73,
+        "instruction": "On slide 5 (Main Competitors), distribute the columns of the comparison table evenly so that all columns have the same width, creating a more balanced appearance.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_73.py",
+        "slide": "./IT_consultant/drills/slide/drill_73.pptx",
+        "action_reference": [
+            "Go to slide 5 titled 'Main Competitors'.",
+            "Click anywhere inside the table to select it, then go to **Table > Select > Table** to ensure the entire table is selected.",
+            "Go to **Table > Autofit > Distribute Columns Evenly** on the menu bar.",
+            "All columns in the selected table will adjust to equal widths, creating a more balanced appearance.",
+            "Check that the content still fits properly in all cells after the adjustment."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_73.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 12,
+        "instruction": "Change the font of the title text on all slides to \"Liberation Sans\" and increase the size to 32 for better readability during the presentation.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_12.py",
+        "slide": "./ML_researcher/drills/slide/drill_12.pptx",
+        "action_reference": [
+            "Select Slide 1 in the Slides pane.",
+            "Hold Ctrl and click on each slide thumbnail to select all slides (or use Ctrl+A to select all slides).",
+            "Click on a title area on any of the selected slides to select all title text boxes.",
+            "On the Text Formatting toolbar, click the font name drop-down and choose \"Liberation Sans\".",
+            "On the same toolbar, click the font size drop-down and select \"32\". The title text on all slides will update with the new font and size."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_12.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 9,
+        "instruction": "Move the company logo image on slide 2 ('Our Company') from its current position to the top-right corner of the slide for better visual balance.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_9.py",
+        "slide": "./IT_consultant/drills/slide/drill_9.pptx",
+        "action_reference": [
+            "Click on the border of the company logo image to select it (the selection handles will appear).",
+            "Drag the image to the top-right corner of slide 2 and release the mouse button to drop it in the new position."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_9.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 29,
+        "instruction": "Rename Slide 2 from 'Our Company' to 'About TechSolve Consulting' to provide a more specific company name for the IT consulting presentation.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_29.py",
+        "slide": "./IT_consultant/drills/slide/drill_29.pptx",
+        "action_reference": [
+            "Select Slide 2 (the 'Our Company' slide) in the Slides pane.",
+            "Go to **Slide > Rename Slide** on the Menu bar (or right-click the slide and choose **Rename Slide**).",
+            "In the Rename Slide dialog, type 'About TechSolve Consulting' in the Name box and click **OK**.",
+            "Note that this only changes the slide name in the Slides pane, not the title text that appears on the slide itself."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_29.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 10,
+        "instruction": "Change the font of all slide titles from the default font to 'Liberation Sans' and increase the size to 48pt to create a more consistent and professional appearance throughout the presentation.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_10.py",
+        "slide": "./IT_consultant/drills/slide/drill_10.pptx",
+        "action_reference": [
+            "Select the title text on slide 1 (highlight it with the cursor).",
+            "On the Text Formatting toolbar (at the top), choose 'Liberation Sans' from the font drop-down list, and select '48 pt' as the **Font Size**. The selected text will update to the new font and size.",
+            "Repeat this process for the titles on slides 2-7 to maintain consistency throughout the presentation."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_10.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 3,
+        "instruction": "Change the layout of slide 2 ('Our Company') from 'Title and Content' to 'Title, 2 Content' to add a second content area that will contain the company mission statement.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_3.py",
+        "slide": "./IT_consultant/drills/slide/drill_3.pptx",
+        "action_reference": [
+            "Select slide 2 ('Our Company').",
+            "Open the **Layouts** panel in the Properties deck on the Sidebar (Figure 50). Click on the **Title, 2 Content** layout. The slide's placeholders will update to the new layout."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_3.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 61,
+        "instruction": "On slide 4 (Our Solutions), fill the table you created with IT consulting service information. In the first row, enter 'Service Package', 'Features', and 'Price' as headers. In the second row, enter 'Basic Support', '24/7 Helpdesk', '$500/month'. In the third row, enter 'Standard Package', 'Helpdesk + Cloud Management', '$1200/month'. In the fourth row, enter 'Enterprise Solution', 'Full IT Management', '$3000/month'.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_61.py",
+        "slide": "./IT_consultant/drills/slide/drill_61.pptx",
+        "action_reference": [
+            "Click inside the first cell of the existing table on slide 4.",
+            "Type 'Service Package' into the cell.",
+            "Press **Tab** to move to the next cell and type 'Features'.",
+            "Press **Tab** again and type 'Price'.",
+            "Press **Tab** to move to the first cell of the second row and type 'Basic Support'.",
+            "Press **Tab** and type '24/7 Helpdesk'.",
+            "Press **Tab** and type '$500/month'.",
+            "Continue tabbing and entering the remaining data: 'Standard Package', 'Helpdesk + Cloud Management', '$1200/month', 'Enterprise Solution', 'Full IT Management', and '$3000/month'."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_61.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 29,
+        "instruction": "Insert a new table on Slide 5 (\"Experimental Settings\"), which has the following parameter information: first row headers \"Parameter\", \"Value\", \"Impact\"; second row data \"Batch size\", \"32\", \"Medium\"; third row data \"Dropout\", \"0.2\", \"High\"; fourth row data \"Activation\", \"ReLU\", \"Low\".",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_29.py",
+        "slide": "./ML_researcher/drills/slide/drill_29.pptx",
+        "action_reference": [
+            "Click on the first cell of the newly created table on Slide 5.",
+            "Type \"Parameter\" and press Tab to move to the next cell.",
+            "Type \"Value\" and press Tab.",
+            "Type \"Impact\" and press Tab to move to the first cell of the second row.",
+            "Continue entering the remaining data: \"Batch size\", \"32\", \"Medium\", \"Dropout\", \"0.2\", \"High\", \"Activation\", \"ReLU\", \"Low\".",
+            "Press Tab after each entry to move to the next cell. The table should now be filled with the parameter information."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_29.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 65,
+        "instruction": "On Slide 6 of the ML presentation, remove the 'Baseline A' data series from the performance comparison chart to focus only on our method's results.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_65.py",
+        "slide": "./ML_researcher/drills/slide/drill_65.pptx",
+        "action_reference": [
+            "Go to Slide 6 'Results'.",
+            "Double-click the chart to enter edit mode.",
+            "Open the Data Table dialog for the chart using the Data Table icon or View > Data Table.",
+            "Click to select the column representing the 'Baseline A' data series.",
+            "Click the Delete Series button (trash can icon) in the Data Table dialog.",
+            "The 'Baseline A' data series will be removed from the data table.",
+            "Click Close to exit the Data Table dialog.",
+            "The chart will update, now displaying only 'Ours' method performance data, without the Baseline A comparison.",
+            "Click outside the chart to exit edit mode and see the final result."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_65.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 80,
+        "instruction": "On slide 1 of the ML presentation, apply a different master slide with a blue gradient background from the available master slides to give the title slide a more professional appearance.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_80.py",
+        "slide": "./ML_researcher/drills/slide/drill_80.pptx",
+        "action_reference": [
+            "Go to slide 1 (title slide).",
+            "In the Sidebar, click on the **Master Slides** deck (usually the first tab).",
+            "Scroll through the list of master slide thumbnails looking for one with a blue gradient background.",
+            "Once you find an appropriate blue gradient design, double-click on that master slide thumbnail.",
+            "The title slide's appearance will update to use the new master: the background will change to the blue gradient, and font styles may also change.",
+            "Check that the title 'Machine Learning Research Presentation' and subtitle text are still properly displayed and readable against the new background.",
+            "If needed, adjust text colors or positioning to ensure good contrast with the new background.",
+            "The title slide now has a more professional appearance with the blue gradient background."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_80.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 14,
+        "instruction": "Create a bulleted list on Slide 4 (\"Datasets\"), adding two more datasets under the existing \"Dataset A\" and \"Dataset B\" items: \"Dataset C (10GB)\" and \"Dataset D (5GB)\".",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_14.py",
+        "slide": "./ML_researcher/drills/slide/drill_14.pptx",
+        "action_reference": [
+            "Navigate to Slide 4 (\"Datasets\").",
+            "Click inside the text box that contains the existing bulleted list with \"Dataset A\" and \"Dataset B\".",
+            "Place the cursor at the end of \"Dataset B\" and press Enter to create a new line.",
+            "Type \"Dataset C (10GB)\".",
+            "Press Enter again and type \"Dataset D (5GB)\".",
+            "Ensure the **Bullets On/Off** button on the Text Formatting toolbar is active so each new line becomes a bulleted list item."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_14.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 5,
+        "instruction": "Add speaker notes to slide 4 ('Our Solutions') with the text: 'Emphasize our three-phase approach: 1. Assessment and strategic planning, 2. Implementation and integration, 3. Ongoing support and optimization. The circular arrows represent our continuous improvement methodology.'",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_5.py",
+        "slide": "./IT_consultant/drills/slide/drill_5.pptx",
+        "action_reference": [
+            "Click the **Notes** view tab (Figure 5) to switch to Notes view. The selected slide will appear with a notes area below it.",
+            "Click in the notes area and type: 'Emphasize our three-phase approach: 1. Assessment and strategic planning, 2. Implementation and integration, 3. Ongoing support and optimization. The circular arrows represent our continuous improvement methodology.' These notes will not show on the slide show, but can be used during presentation or printed as part of notes."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_5.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 72,
+        "instruction": "On Slide 2 of the ML presentation, center-align the model illustration image both horizontally and vertically on the slide.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_72.py",
+        "slide": "./ML_researcher/drills/slide/drill_72.pptx",
+        "action_reference": [
+            "Go to Slide 2 'Background'.",
+            "Click the model illustration image to select it.",
+            "Go to Format > Align > Center on the Menu bar to align the image horizontally to the slide center.",
+            "Then, go to Format > Align > Center (Vertically) to align the image vertically on the slide.",
+            "The image will now be perfectly centered both horizontally and vertically on the slide.",
+            "Note that this may overlap with the text, so you may need to resize or move text boxes if the centered image covers important content.",
+            "Click elsewhere on the slide to deselect the image and see the final centered position."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_72.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 57,
+        "instruction": "On Slide 6 (Results), hide the chart legend as the bar colors are already explained in the slide text.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_57.py",
+        "slide": "./ML_researcher/drills/slide/drill_57.pptx",
+        "action_reference": [
+            "Click the chart to activate chart editing (double-click if needed).",
+            "In the Sidebar's **Chart Elements** or **Properties** section, find the **Legend** option. Uncheck **Legend** to hide it.",
+            "The legend will disappear from the chart."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_57.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 21,
+        "instruction": "On Slide 3 (\"Proposed Method\"), draw a rectangle shape around the loss function equation to visually highlight this important mathematical formula.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_21.py",
+        "slide": "./ML_researcher/drills/slide/drill_21.pptx",
+        "action_reference": [
+            "Go to Slide 3 (\"Proposed Method\").",
+            "Click the **Rectangle** tool on the Drawing toolbar.",
+            "On the slide, click and drag to draw a rectangle that frames the loss function equation.",
+            "Release the mouse button. A rectangle shape is now placed on the slide surrounding the equation."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_21.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 69,
+        "instruction": "Delete slide 7 (Our Partners) from the presentation as this information will be covered in a separate handout instead.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_69.py",
+        "slide": "./IT_consultant/drills/slide/drill_69.pptx",
+        "action_reference": [
+            "In the Slides pane, click on the thumbnail of slide 7 titled 'Our Partners'.",
+            "Press the **Delete** key on your keyboard (or right-click the slide thumbnail and choose **Delete Slide**).",
+            "Confirm deletion if prompted. The slide is removed, and any remaining slides renumber accordingly."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_69.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 9,
+        "instruction": "Update the title text on Slide 1 from \"Machine Learning Research Presentation\" to \"Accelerating Neural Network Inference: A Novel Approach\".",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_9.py",
+        "slide": "./ML_researcher/drills/slide/drill_9.pptx",
+        "action_reference": [
+            "Click on Slide 1 (the title slide) to select it.",
+            "Click in the title placeholder that currently contains \"Machine Learning Research Presentation\".",
+            "Delete the existing text and type the new title: \"Accelerating Neural Network Inference: A Novel Approach\".",
+            "Click outside the placeholder or press Esc to finish editing the title text."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_9.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 60,
+        "instruction": "On Slide 5 of the ML presentation, add a third row to the hyperparameters table to include 'Batch size' with a value of '32', using the Insert Table dialog to modify the table size.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_60.py",
+        "slide": "./ML_researcher/drills/slide/drill_60.pptx",
+        "action_reference": [
+            "Go to Slide 5 'Experimental settings'.",
+            "Click on the existing hyperparameters table to select it.",
+            "Go to Insert > Table on the Menu bar to open the Insert Table dialog.",
+            "Enter 2 for the number of columns (same as current table).",
+            "Enter 3 for the number of rows (one more than current table).",
+            "Click OK to apply the changes and adjust the table size.",
+            "Click in the first cell of the new third row and type 'Batch size'.",
+            "Press Tab to move to the second cell of the third row.",
+            "Type '32' in this cell.",
+            "Click outside the table to finish editing."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_60.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 83,
+        "instruction": "On slide 4 of the ML presentation, create a third-level bullet point under 'Dataset A'. Press Tab to indent 'Dataset A', then add the sub-point 'Contains 10,000 training examples'. Then promote 'Dataset B' back to second-level to match the original structure.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_83.py",
+        "slide": "./ML_researcher/drills/slide/drill_83.pptx",
+        "action_reference": [
+            "Go to slide 4 (Datasets).",
+            "Click at the beginning of the 'Dataset A' bullet point.",
+            "Press **Tab** to indent it and make it a third-level bullet (it was already at second-level).",
+            "Press Enter at the end of 'Dataset A' to create a new bullet point at the same level.",
+            "Type 'Contains 10,000 training examples' for this new sub-point.",
+            "Click at the beginning of the 'Dataset B' bullet point, which is now also at the third level.",
+            "Press **Shift+Tab** to promote it back to the second level, matching its original position in the hierarchy.",
+            "The list structure should now be:",
+            "- 'We use various datasets to train our model' (first level)",
+            "  - 'Dataset A' (second level)",
+            "    - 'Contains 10,000 training examples' (third level)",
+            "  - 'Dataset B' (second level)"
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_83.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 41,
+        "instruction": "On Slide 2 (About TechSolve Consulting), add a hyperlink to the text 'Visit Our Website' at the bottom of the slide, linking to 'www.techsolve-consulting.com'.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_41.py",
+        "slide": "./IT_consultant/drills/slide/drill_41.pptx",
+        "action_reference": [
+            "Go to Slide 2 (About TechSolve Consulting).",
+            "Go to **Insert > Text Box** and place a text box at the bottom of the slide.",
+            "Type 'Visit Our Website' in the text box.",
+            "Select the text you just typed and go to **Insert > Hyperlink** to open the Hyperlink dialog.",
+            "On the **Internet** page of the dialog, type 'www.techsolve-consulting.com' in the **Target** field.",
+            "Click **Apply** or **OK**. The text becomes a clickable hyperlink to the specified website."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_41.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 23,
+        "instruction": "Delete the horizontal black line at the top of slide 3 as it doesn't match the new color scheme being implemented in the presentation.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_23.py",
+        "slide": "./IT_consultant/drills/slide/drill_23.pptx",
+        "action_reference": [
+            "Click the horizontal black line shape at the top of slide 3 to select it.",
+            "Press the **Delete** key (or right-click and choose **Cut**). The object will be removed from the slide."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_23.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 77,
+        "instruction": "On slide 1 (the title slide), change the case of 'TECHNOLOGY CONSULTING' to 'Technology Consulting' with proper title case to match the company's branding guidelines.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_77.py",
+        "slide": "./IT_consultant/drills/slide/drill_77.pptx",
+        "action_reference": [
+            "Go to slide 1 (the title slide).",
+            "Select the title text 'TECHNOLOGY CONSULTING' or the portion that needs case adjustment.",
+            "Go to **Format > Text > Change Case** on the menu bar.",
+            "Choose **Capitalize Every Word** from the submenu.",
+            "The selected text will transform to 'Technology Consulting' with the first letter of each word capitalized.",
+            "If necessary, adjust any specific words that should not be capitalized according to title case rules."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_77.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 55,
+        "instruction": "On Slide 5 (Experimental settings), increase the height of the row containing \"Epochs\" to 1.5 cm to improve readability.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_55.py",
+        "slide": "./ML_researcher/drills/slide/drill_55.pptx",
+        "action_reference": [
+            "Move your mouse to the border between the \"Epochs\" row and the row below it. The cursor changes to a double vertical arrow.",
+            "Click and drag the border down to increase the row height to approximately 1.5 cm. Release the mouse when the row has the desired height."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_55.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 6,
+        "instruction": "Change the title text on slide 1 from 'Technology Consulting' to 'Strategic Technology Consulting: Driving Digital Transformation' to create a more compelling and modern title.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_6.py",
+        "slide": "./IT_consultant/drills/slide/drill_6.pptx",
+        "action_reference": [
+            "Click in the **Title** placeholder on slide 1 (where it currently says 'Technology Consulting').",
+            "Type the new title text: 'Strategic Technology Consulting: Driving Digital Transformation'. The text will appear in the title placeholder with the default title style."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_6.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 60,
+        "instruction": "On slide 4 (Our Solutions), insert a table with 3 columns and 4 rows below the circular arrow diagram. The table will display service packages with their features and prices.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_60.py",
+        "slide": "./IT_consultant/drills/slide/drill_60.pptx",
+        "action_reference": [
+            "Go to slide 4 titled 'Our Solutions'.",
+            "Go to **Insert > Table** on the menu bar.",
+            "In the **Insert Table** dialog, set **Columns** to 3 and **Rows** to 4.",
+            "Click **OK**. A table with 3 columns and 4 rows appears on the slide below the circular arrow diagram."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_60.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 59,
+        "instruction": "On Slide 5 (Main Competitors), modify the competitor comparison table by replacing the existing '\u25ef' and '\u2716\ufe0f' symbols with color-coded indicators: green circles (\u25cf) for strengths and red X marks (\u2717) for weaknesses to make the comparison more visually intuitive.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_59.py",
+        "slide": "./IT_consultant/drills/slide/drill_59.pptx",
+        "action_reference": [
+            "Go to Slide 5 and click in the cell containing the first '\u25ef' symbol.",
+            "Delete the existing symbol and go to **Insert > Special Character**.",
+            "Find and select a filled circle symbol (\u25cf).",
+            "With the symbol selected, use the Font Color tool to change it to green (#00CC00).",
+            "Repeat this process for all other '\u25ef' symbols in the table, making them all green filled circles.",
+            "Now click in a cell containing a '\u2716\ufe0f' symbol, delete it, and insert an 'X' symbol (\u2717).",
+            "Color this X symbol red (#CC0000).",
+            "Repeat for any other '\u2716\ufe0f' symbols in the table.",
+            "The competitor comparison now uses intuitive color-coded indicators: green circles for positive attributes and red X marks for negative ones."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_59.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 7,
+        "instruction": "Replace the generic bullet points on slide 2 ('Our Company') with specific IT consulting services: 'Our company specializes in:', 'Cloud Migration & Integration', 'Cybersecurity Solutions', 'IT Infrastructure Optimization', and 'Digital Transformation'.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_7.py",
+        "slide": "./IT_consultant/drills/slide/drill_7.pptx",
+        "action_reference": [
+            "Click in a **Content** placeholder on slide 2 that contains the bulleted list area (where it currently says 'Our company is good at', 'A', 'B').",
+            "Delete the existing text and type 'Our company specializes in:'. Press **Enter** to create a new bullet, then type 'Cloud Migration & Integration'. Press **Enter** again, type 'Cybersecurity Solutions'. Continue with 'IT Infrastructure Optimization' and 'Digital Transformation' on new bullet points."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_7.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 14,
+        "instruction": "Find and replace all instances of 'Company' with 'TechSolve Inc.' throughout the presentation to replace the generic company references with the actual company name.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_14.py",
+        "slide": "./IT_consultant/drills/slide/drill_14.pptx",
+        "action_reference": [
+            "Press **Ctrl+H** or go to **Edit > Find & Replace** to open the Find & Replace dialog.",
+            "In the dialog, enter 'Company' in the **Find** box. Enter 'TechSolve Inc.' in the **Replace** box.",
+            "Click **Replace All** to change every occurrence. Impress will search for the text and replace all instances of 'Company' with 'TechSolve Inc.' throughout the presentation."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_14.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 65,
+        "instruction": "Insert a new slide after slide 3 (Understanding the Problem) with the 'Title and Content' layout. Give it the title 'Solution Framework' as this will be a transition slide between problems and solutions.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_65.py",
+        "slide": "./IT_consultant/drills/slide/drill_65.pptx",
+        "action_reference": [
+            "Go to slide 3 titled 'Understanding the Problem'.",
+            "Go to **Slide > New Slide** on the menu bar (or click the **New Slide** button on the Standard toolbar).",
+            "When the Layout selection menu appears, click **Title and Content** layout.",
+            "The new slide will have a title placeholder and a content placeholder. Click in the title placeholder and type 'Solution Framework'."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_65.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 26,
+        "instruction": "Add a new slide after Slide 7 (Our Partners) with the Title and Content layout. Title the slide 'Client Success Stories' to showcase IT consulting case studies.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_26.py",
+        "slide": "./IT_consultant/drills/slide/drill_26.pptx",
+        "action_reference": [
+            "In the Slides pane, click on Slide 7 ('Our Partners') to select it.",
+            "Click **Insert > Slide** on the Menu bar to add a new slide. The new slide is inserted after Slide 7.",
+            "In the Sidebar, click **Properties** and open the **Layouts** panel. Choose **Title, Content** from the layout options to apply that layout to the new slide.",
+            "Click in the title placeholder and type 'Client Success Stories'."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_26.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 44,
+        "instruction": "On Slide 4 (Our Solutions), add a 2pt dashed blue border around each solution number text box to visually separate them from the circular arrows diagram.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_44.py",
+        "slide": "./IT_consultant/drills/slide/drill_44.pptx",
+        "action_reference": [
+            "Go to Slide 4 and hold **Shift** while clicking each of the solution number text boxes to select them all.",
+            "On the Line and Filling toolbar, use the **Line Color** drop-down to select blue for the border color.",
+            "Use the **Line Width** control to set the border width to 2pt.",
+            "Use the **Line Style** dropdown to select a dashed line style.",
+            "All three solution number boxes will now have a blue dashed border, visually separating them from other elements."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_44.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 11,
+        "instruction": "Apply bold and italic formatting to the text 'Cloud Migration & Integration' and 'Digital Transformation' on slide 2 to emphasize these as the company's primary service offerings.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_11.py",
+        "slide": "./IT_consultant/drills/slide/drill_11.pptx",
+        "action_reference": [
+            "Select the text 'Cloud Migration & Integration' in the bulleted list on slide 2.",
+            "Click the **Bold** (B) button on the Formatting toolbar (or press **Ctrl+B**) to make the text bold. Then click the **Italic** (I) button (or press **Ctrl+I**) to italicize it.",
+            "Repeat the same steps for 'Digital Transformation' text. Both items will now be bold and italic in the list."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_11.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 34,
+        "instruction": "On Slide 5 (\"Experimental Settings\"), delete the additional parameters table that was below the hyperparameters table if it exists, as this information will be presented in a different format.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_34.py",
+        "slide": "./ML_researcher/drills/slide/drill_34.pptx",
+        "action_reference": [
+            "Go to Slide 5 (\"Experimental Settings\").",
+            "Click on the border of the additional parameters table to select the entire table (you should see selection handles around it).",
+            "Press the **Delete** key on the keyboard.",
+            "The additional parameters table is now removed from the slide, leaving only the original hyperparameters table."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_34.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 4,
+        "instruction": "Reorder slides so that the \"Proposed Method\" slide (Slide 3) appears after the \"Experimental Settings\" slide (Slide 5), to present the method after discussing the datasets and experimental setup.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_4.py",
+        "slide": "./ML_researcher/drills/slide/drill_4.pptx",
+        "action_reference": [
+            "In the Slides pane, click and hold the Slide 3 thumbnail (\"Proposed Method\").",
+            "Drag the thumbnail to position it after Slide 5 (\"Experimental Settings\"). You will see a black line indicating the new location.",
+            "Release the mouse button to drop the slide at the new position, changing the slide order."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_4.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 8,
+        "instruction": "Add speaker notes to the \"Proposed Method\" slide (Slide 3) explaining that the loss function shown is the Mean Squared Error commonly used in regression tasks.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_8.py",
+        "slide": "./ML_researcher/drills/slide/drill_8.pptx",
+        "action_reference": [
+            "Select Slide 3 (\"Proposed Method\").",
+            "Click the **Notes** tab in the Workspace to switch to Notes view.",
+            "Click in the text area below the slide (it reads \"Click to add notes\") and type: \"The loss function shown is Mean Squared Error (MSE), which measures the average squared difference between the predicted values (y') and actual values (y). It's commonly used in regression tasks and penalizes larger errors more than smaller ones due to the squaring operation.\"",
+            "After adding notes, return to Normal view by clicking the **Normal** tab."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_8.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 38,
+        "instruction": "On Slide 7 (Our Partners), change the bullet style of the partner list from the default round bullets to square bullets to create a more modern look.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_38.py",
+        "slide": "./IT_consultant/drills/slide/drill_38.pptx",
+        "action_reference": [
+            "Go to Slide 7 (Our Partners) and click within the bulleted list.",
+            "Go to **Format > Bullets and Numbering** to open the Bullets and Numbering dialog.",
+            "In the dialog's **Bullets** tab, select the square bullet style (\u25a0) from the bullet options.",
+            "Click **OK** to apply the change. The partner list will now display with square bullets instead of round ones."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_38.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 11,
+        "instruction": "On Slide 2 (\"Background\"), make the text \"slow\" both bold and italic to emphasize the inference speed challenge that the research addresses.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_11.py",
+        "slide": "./ML_researcher/drills/slide/drill_11.pptx",
+        "action_reference": [
+            "Go to Slide 2 (\"Background\").",
+            "Double-click the text box containing \"But very slow inference...\" to edit it.",
+            "Select the word \"slow\" in the text.",
+            "Click the **Bold** button on the Text Formatting toolbar to bold the text.",
+            "Click the **Italic** button on the Text Formatting toolbar to italicize the same selected text."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_11.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 34,
+        "instruction": "On Slide 7 (Our Partners), move the bullet point list with 'Partner A' and 'Partner B' to the upper right quadrant of the slide to create space for additional partner categories.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_34.py",
+        "slide": "./IT_consultant/drills/slide/drill_34.pptx",
+        "action_reference": [
+            "Click on Slide 7 (Our Partners) to select it.",
+            "Click on the border of the text box containing the partner bullet points to select it (the selection handles will appear).",
+            "Drag the text box to the upper right quadrant of the slide and release the mouse button to position it there.",
+            "Ensure the text is still fully visible and properly aligned within its new position."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_34.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 2,
+        "instruction": "Rename slide 4 ('Our Solutions') to 'Strategic Technology Solutions' to better reflect the professional consulting approach of the company.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_2.py",
+        "slide": "./IT_consultant/drills/slide/drill_2.pptx",
+        "action_reference": [
+            "Select slide 4 ('Our Solutions') in the Slides pane.",
+            "Go to **Slide > Rename Slide** on the Menu bar (or right-click the slide and choose **Rename Slide**). In the Rename Slide dialog, type 'Strategic Technology Solutions' in the Name box and click **OK**."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_2.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 28,
+        "instruction": "Move Slide 5 (Main Competitors) to appear before Slide 3 (Understanding the Problem), creating a more logical flow by presenting competitor analysis before discussing problems.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_28.py",
+        "slide": "./IT_consultant/drills/slide/drill_28.pptx",
+        "action_reference": [
+            "In the Slides pane, click and hold the Slide 5 thumbnail (Main Competitors).",
+            "Drag the thumbnail upward until you see a black line appear between Slides 2 and 3, indicating the new position.",
+            "Release the mouse button to place the slide. The Main Competitors slide is now Slide 3, and the original Slides 3 and 4 have been shifted down."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_28.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 68,
+        "instruction": "On Slide 6 of the ML presentation, resize the performance chart to be 50% larger while maintaining its aspect ratio, and center it on the slide.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_68.py",
+        "slide": "./ML_researcher/drills/slide/drill_68.pptx",
+        "action_reference": [
+            "Go to Slide 6 'Results'.",
+            "Click on the chart (outside of edit mode) to select it, showing the green sizing handles.",
+            "Hold the Shift key and drag a corner handle outward to increase the chart size by approximately 50% while preserving its proportions.",
+            "Release the mouse when the chart is at the desired larger size.",
+            "With the resized chart still selected, go to Format > Align > Center to horizontally center the chart on the slide.",
+            "Then go to Format > Align > Center (Vertically) to vertically center it.",
+            "The chart is now 50% larger and perfectly centered on the slide, maintaining its original proportions."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_68.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 46,
+        "instruction": "Insert the 'tech_logo.png' image in the bottom right corner of Slide 1 (Title slide) with a width of 3cm, maintaining its aspect ratio.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_46.py",
+        "slide": "./IT_consultant/drills/slide/drill_46.pptx",
+        "action_reference": [
+            "Go to Slide 1 (Title slide).",
+            "Go to **Insert > Image**. In the file dialog that appears, browse to find 'tech_logo.png', select it, and click **Open**.",
+            "The image will be inserted onto the slide. Position it in the bottom right corner.",
+            "To set a precise size, right-click the image and select **Position and Size**.",
+            "In the Position and Size dialog, set the **Width** to 3cm, and ensure 'Keep ratio' is checked to maintain the aspect ratio.",
+            "Click **OK** to apply the size change, and if needed, adjust the position to ensure it's properly placed in the bottom right corner."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_46.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 75,
+        "instruction": "Change Slide 4 of the ML presentation from 'Title and Content' layout to 'Title and 2 Content' layout to add a second content area.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_75.py",
+        "slide": "./ML_researcher/drills/slide/drill_75.pptx",
+        "action_reference": [
+            "Go to Slide 4 'Datasets'.",
+            "Open the Layouts panel in the Sidebar by clicking on the Layouts tab.",
+            "Look for the 'Title and 2 Content' layout thumbnail in the list of available layouts.",
+            "Click on this layout thumbnail.",
+            "The slide's arrangement will change to include a title area at the top and two content areas side by side.",
+            "The existing content (the bullet list with 'Dataset A' and 'Dataset B') will move into the left content area automatically.",
+            "The right content area will be empty and ready for new content to be added.",
+            "Click in the right content placeholder to add complementary content about the datasets."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_75.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 22,
+        "instruction": "Duplicate the company logo on slide 2 using copy and paste to create a second instance that will be used in the footer area of the slide.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_22.py",
+        "slide": "./IT_consultant/drills/slide/drill_22.pptx",
+        "action_reference": [
+            "Click on the company logo image on slide 2 to select it.",
+            "Press **Ctrl+C** to copy the shape, then press **Ctrl+V** to paste a duplicate. The copied shape will appear (usually offset slightly).",
+            "Drag the duplicated logo to the desired location in the footer area of the slide, and resize it to be smaller (about 1 inch/2.5 cm wide) to function as a footer element."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_22.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 50,
+        "instruction": "On Slide 7 (Our Partners), add a text box at the bottom of the slide with the following contact information: 'Contact us: info@techsolve-consulting.com | +1 (555) 123-4567 | www.techsolve-consulting.com'.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_50.py",
+        "slide": "./IT_consultant/drills/slide/drill_50.pptx",
+        "action_reference": [
+            "Go to Slide 7 (Our Partners).",
+            "Go to **Insert > Text Box** on the Menu bar.",
+            "Click and drag at the bottom of the slide to create a text box that spans most of the slide width.",
+            "Type 'Contact us: info@techsolve-consulting.com | +1 (555) 123-4567 | www.techsolve-consulting.com'",
+            "Select all the text and use the Formatting toolbar to center-align it.",
+            "If needed, adjust the text box position so it's centered at the bottom of the slide.",
+            "The contact information is now clearly displayed at the bottom of the Partners slide."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_50.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 58,
+        "instruction": "On Slide 6 (Results), resize the chart to make it 33% wider but keep the same height, so that the bars are more spread out and easier to read.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_58.py",
+        "slide": "./ML_researcher/drills/slide/drill_58.pptx",
+        "action_reference": [
+            "Click the chart on Slide 6 to select it (you'll see a border and resizing handles).",
+            "Drag the middle handle on the right side of the chart outward to make the chart approximately 33% wider while keeping the same height.",
+            "Release the mouse button, and the chart will be resized."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_58.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 31,
+        "instruction": "On Slide 6 (\"Results\"), change the title of the bar chart from \"Chart Title\" to \"Performance Across Datasets (higher is better)\" to provide more context for the comparison.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_31.py",
+        "slide": "./ML_researcher/drills/slide/drill_31.pptx",
+        "action_reference": [
+            "Double-click the chart on Slide 6 to edit it.",
+            "Click once on the chart's title text (\"Chart Title\").",
+            "The title text box becomes editable. Delete the current text and type \"Performance Across Datasets (higher is better)\".",
+            "Click outside the title or press Esc. The chart now displays the new, more descriptive title."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_31.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 2,
+        "instruction": "Duplicate the \"Results\" slide (Slide 6) to create a new slide for presenting additional performance metrics and analysis.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_2.py",
+        "slide": "./ML_researcher/drills/slide/drill_2.pptx",
+        "action_reference": [
+            "Select Slide 6 (\"Results\") in the Slides pane.",
+            "Right-click on that slide thumbnail and choose **Duplicate Slide**.",
+            "A duplicate of the selected slide is created and placed after the original slide as Slide 7."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_2.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 70,
+        "instruction": "On Slide 2 of the ML presentation, rotate the model illustration image by 90 degrees clockwise to show the network flow from top to bottom instead of left to right.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_70.py",
+        "slide": "./ML_researcher/drills/slide/drill_70.pptx",
+        "action_reference": [
+            "Go to Slide 2 'Background'.",
+            "Select the model illustration image.",
+            "Click it again to enter rotation mode \u2013 the selection handles will change to red circular handles.",
+            "Place the cursor over one of the red corner rotation handles.",
+            "Click and drag the handle clockwise until the image rotates 90 degrees (you can hold Shift to constrain rotation to 15\u00b0 increments, making it easier to hit exactly 90\u00b0).",
+            "Release the mouse button when the image is rotated to a vertical orientation.",
+            "The model illustration will now be rotated 90 degrees clockwise, showing the network flow from top to bottom.",
+            "Reposition the image as needed after rotation by dragging it to an appropriate location on the slide."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_70.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 70,
+        "instruction": "Add speaker notes to slide 4 (Our Solutions) with the following talking points: 'Emphasize the cyclical nature of our solution approach', 'Mention our proprietary methodology', and 'Highlight success rates with previous clients'.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_70.py",
+        "slide": "./IT_consultant/drills/slide/drill_70.pptx",
+        "action_reference": [
+            "Go to slide 4 titled 'Our Solutions'.",
+            "Go to **View > Notes** on the menu bar to switch to the Notes view.",
+            "Click in the **Click to add notes** area below the slide thumbnail.",
+            "Type the following notes:\n- Emphasize the cyclical nature of our solution approach\n- Mention our proprietary methodology\n- Highlight success rates with previous clients",
+            "Switch back to Normal view (View > Normal) when done."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_70.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 39,
+        "instruction": "Use Find and Replace to update all instances of 'Problem' in the presentation to 'Challenge' to frame the consulting services more positively.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_39.py",
+        "slide": "./IT_consultant/drills/slide/drill_39.pptx",
+        "action_reference": [
+            "Press **Ctrl+H** or go to **Edit > Find & Replace** to open the Find & Replace dialog.",
+            "In the dialog, enter 'Problem' in the **Find** box and 'Challenge' in the **Replace** box.",
+            "Click **Replace All** to change every occurrence throughout the presentation.",
+            "A dialog will appear indicating how many replacements were made. Click **OK** to close it.",
+            "Slide 3 will now show 'Understanding the Challenge' as the title and 'Challenge 1', 'Challenge 2', 'Challenge 3' as the labels."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_39.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 47,
+        "instruction": "On Slide 6 (chart slide), change the chart title from 'Chart Title' to 'Quarterly Revenue Growth by Service Category' to provide context for the data visualization.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_47.py",
+        "slide": "./IT_consultant/drills/slide/drill_47.pptx",
+        "action_reference": [
+            "Double-click the chart on Slide 6 to go into edit mode.",
+            "Right-click on the chart title and select **Edit Title** (or if no title exists, right-click on the chart and select **Insert Title**).",
+            "Replace the existing title with 'Quarterly Revenue Growth by Service Category'.",
+            "Click outside the chart or press Esc to exit edit mode and see the updated chart title."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_47.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 16,
+        "instruction": "Disable automatic text fitting in the title text box on slide 3 ('Understanding the Problem') so that when you increase the font size later, the text won't automatically shrink to fit the box.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_16.py",
+        "slide": "./IT_consultant/drills/slide/drill_16.pptx",
+        "action_reference": [
+            "Right-click the title text box on slide 3 and choose **Text Box** (or **Text**). In the Text dialog that appears, go to the **Text** tab.",
+            "Uncheck **Fit to frame** (or **AutoFit text**). This option, when disabled, stops text from automatically resizing to fit the box.",
+            "Click **OK**. Now if the text exceeds the size of the text box, it will overflow rather than shrink \u2014 you can resize the box or adjust text manually as needed."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_16.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 16,
+        "instruction": "Center-align the title text on all slides in the presentation for a more balanced and professional appearance.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_16.py",
+        "slide": "./ML_researcher/drills/slide/drill_16.pptx",
+        "action_reference": [
+            "Select Slide 1 in the Slides pane.",
+            "Hold Ctrl and click on each slide thumbnail to select all slides (or use Ctrl+A).",
+            "Click on a title area on any of the selected slides to select all title text boxes.",
+            "On the Text Formatting toolbar, click the **Center** alignment button.",
+            "The title text on all slides is now centered within the text boxes."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_16.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 41,
+        "instruction": "Change the bullet style of the list on Slide 4 (Datasets) from the default round bullets to square bullets.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_41.py",
+        "slide": "./ML_researcher/drills/slide/drill_41.pptx",
+        "action_reference": [
+            "Click within the bulleted list on Slide 4 to select it.",
+            "Go to **Format > Bullets and Numbering** on the Menu bar to open the Bullets and Numbering dialog.",
+            "Select a square bullet style from the options and click **OK**. The list now uses square bullets."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_41.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 61,
+        "instruction": "On Slide 5 of the ML presentation, adjust the column widths in the hyperparameters table so both columns have equal width.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_61.py",
+        "slide": "./ML_researcher/drills/slide/drill_61.pptx",
+        "action_reference": [
+            "Go to Slide 5 'Experimental settings'.",
+            "Click on the hyperparameters table to select it.",
+            "Drag to highlight both columns of the table (all cells).",
+            "Go to Table on the Menu bar, then choose Optimize > Distribute Columns Evenly.",
+            "The columns in the table will adjust to have equal width, making the presentation of the hyperparameters more balanced.",
+            "Click outside the table to finish editing and see the result."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_61.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    },
+    {
+        "drill_id": 55,
+        "instruction": "Add a custom footer to all slides except the title slide, which includes the text 'TechSolve IT Consulting', the current date, and slide numbers.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_55.py",
+        "slide": "./IT_consultant/drills/slide/drill_55.pptx",
+        "action_reference": [
+            "Go to **View > Header and Footer** to open the Header and Footer dialog.",
+            "In the dialog, go to the **Slides** tab.",
+            "Check the box for **Date and time** and select either automatic update or fixed date as desired.",
+            "Check the box for **Footer** and type 'TechSolve IT Consulting' in the text field.",
+            "Check the box for **Slide number** to include slide numbering.",
+            "Check the option **Don't show on first slide** to exclude the footer from the title slide.",
+            "Click **Apply to All** to add this footer to all slides except the title slide.",
+            "View the slides to confirm that the footer appears correctly on all non-title slides."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_55.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 45,
+        "instruction": "On Slide 6 (the chart slide), move the bar chart to the right side of the slide to create space for explanatory text on the left side.",
+        "eval_script": "IT_consultant/drills/eval_script_odp/eval_45.py",
+        "slide": "./IT_consultant/drills/slide/drill_45.pptx",
+        "action_reference": [
+            "Go to Slide 6 (the slide with the bar chart).",
+            "Select the chart by clicking on it.",
+            "Click and hold on the chart's border (avoid the handles), then drag the chart to the right side of the slide.",
+            "Release the mouse button to place it in the new position, leaving space on the left side for adding explanatory text."
+        ],
+        "task_file": "IT_consultant/drills/slide_odp/drill_45.odp",
+        "base_file": "IT_consultant/base_slides.odp"
+    },
+    {
+        "drill_id": 35,
+        "instruction": "Add a new slide at the end of the presentation to include 'Future Work' section using the Slides pane context menu.",
+        "eval_script": "ML_researcher/drills/eval_script_odp/eval_35.py",
+        "slide": "./ML_researcher/drills/slide/drill_35.pptx",
+        "action_reference": [
+            "In the Slides pane on the left, right-click on Slide 6 (Results) thumbnail.",
+            "From the context menu, select **New Slide**. A new slide is inserted after the Results slide."
+        ],
+        "task_file": "ML_researcher/drills/slide_odp/drill_35.odp",
+        "base_file": "ML_researcher/base_slides.odp"
+    }
+]

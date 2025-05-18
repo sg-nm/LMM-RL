@@ -1,5 +1,6 @@
 from .launcher import DistributedTorchRayActor, PPORayActorGroup, ReferenceModelRayActor, RewardModelRayActor, ReferenceModelRayActor_multimodal
-from .ppo_actor import ActorModelRayActor, ActorModelRayActor_GUI, ActorModelRayActor_TG, ActorModelRayActor_Card
+from .ppo_actor import ActorModelRayActor, ActorModelRayActor_TG, ActorModelRayActor_Card
+from .ppo_actor_gui import ActorModelRayActor_GUI
 from .ppo_critic import CriticModelRayActor, CriticModelRayActor_CARD
 from .vllm_engine import batch_vllm_engine_call, create_vllm_engines
 
